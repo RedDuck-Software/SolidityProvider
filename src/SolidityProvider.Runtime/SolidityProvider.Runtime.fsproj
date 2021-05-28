@@ -40,7 +40,7 @@
     <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\net45\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\net45\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries2" />
     </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/net45" />
+     <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/net45" />
     <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
     </CreateItem>

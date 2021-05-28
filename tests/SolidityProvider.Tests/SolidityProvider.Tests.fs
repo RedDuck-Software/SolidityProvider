@@ -1,5 +1,13 @@
 module SolidityProviderTests
 
-open SolidityProviderImplementation
+open NUnit.Framework
 
-type Generative2 = SolidityProvider.SolidityTypes<"">
+[<Literal>]
+let path = @"C:\Users\user\Git\dEth\smart-contracts\dETH2\build"
+
+//type Generative2 = SolidityProviderNS.SolidityTypes<path>
+
+[<Test>]
+let SomeTest () = 
+    //Domain.constructRootType
+    ()
