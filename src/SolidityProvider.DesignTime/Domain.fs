@@ -2,50 +2,34 @@
 
 open System.Reflection
 open System.IO
+open System
 open FSharp.Core.CompilerServices
-open FSharp.Data
-open ProviderImplementation.ProvidedTypes
+open FSharp.Json
 open Nethereum.ABI.FunctionEncoding.Attributes
 open Newtonsoft.Json.Linq
-open System
+open ProviderImplementation.ProvidedTypes
 
 [<TypeProviderAssembly>]
 do ()
 
-[<Literal>]
-let abiJsonSchema = @"[
-{
-    ""constant"": false,
-    ""inputs"": [
-    {
-        ""internalType"": ""address"",
-        ""name"": ""apt"",
-        ""type"": ""address""
-    },
-    {
-        ""internalType"": ""address"",
-        ""name"": ""urn"",
-        ""type"": ""address""
-    },
-    {
-        ""internalType"": ""uint256"",
-        ""name"": ""wad"",
-        ""type"": ""uint256""
-    }
-    ],
-    ""name"": ""daiJoin_join"",
-    ""outputs"": [{
-    ""internalType"": ""int256"",
-    ""name"": """",
-    ""type"": ""int256""
-    }],
-    ""payable"": false,
-    ""stateMutability"": ""nonpayable"",
-    ""type"": ""function""
-}
-]"
+type Address = string
 
-type AbiSchema = JsonProvider.JsonProvider<abiJsonSchema>
+type Parameter = {
+    internalType:string;
+    name:string;
+    _type:string; // todo add annotation
+}
+
+type Root = {
+    constant: bool;
+    inputs: Parameter array;
+    name: string;
+    outputs: Parameter array;
+    payable: bool;
+    stateMutability: string;
+    _type: string; // todo add annotation
+}
+
 
 let getAttributeWithParams (attributeType:Type) (args: obj[]) = 
     { new Reflection.CustomAttributeData() with
@@ -55,22 +39,22 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
 
 let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues: obj[]) = 
     let createType (contractName, abi) =
-        let data = AbiSchema.Parse(abi)
+        let roots = Json.deserialize<Root array> abi
 
         // mock for a while
         let solidityTypeToNetType solType = typeof<bigint>
 
-        let solidityOutputToNetProperty index (output:AbiSchema.Outputs) =
-            let netType = solidityTypeToNetType output.Type
-            let name = if output.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else output.Name
+        let solidityOutputToNetProperty index (output:Parameter) =
+            let netType = solidityTypeToNetType output._type
+            let name = if output.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else output.name
             let property = ProvidedProperty(name, netType)
-    
-            getAttributeWithParams typeof<ParameterAttribute> [|output.Type;output.Name;index+1|]
+        
+            getAttributeWithParams typeof<ParameterAttribute> [|output._type;output.name;index+1|]
             |> property.AddCustomAttribute
-
+        
             property
 
-        let solidityOutputTypesToNetReturnType (functionName:string) (solTypes:AbiSchema.Outputs[]) =
+        let solidityOutputTypesToNetReturnType (functionName:string) (solTypes:Parameter array) =
             match Array.length solTypes with
               | 1 -> solTypes |> Array.head |> solidityTypeToNetType
               | _ ->
@@ -86,15 +70,15 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
 
                 upcast outputType
 
-        let solidityFunctionToNetMethod (solidityFunction:AbiSchema.Root) = 
-            let parameters = solidityFunction.Inputs
-                             |> Array.map (fun j -> ProvidedParameter(j.Name, solidityTypeToNetType j.InternalType))
+        let solidityFunctionToNetMethod (solidityFunction:Root) = 
+            let parameters = solidityFunction.inputs
+                             |> Array.map (fun j -> ProvidedParameter(j.name, solidityTypeToNetType j.internalType))
                              |> Array.toList
-            let returnType = solidityOutputTypesToNetReturnType solidityFunction.Name solidityFunction.Outputs
-            ProvidedMethod(solidityFunction.Name, parameters, returnType)
+            let returnType = solidityOutputTypesToNetReturnType solidityFunction.name solidityFunction.outputs
+            ProvidedMethod(solidityFunction.name, parameters, returnType)
 
-        let methods = data 
-                      |> Array.where (fun i -> i.Type = "function") 
+        let methods = roots
+                      |> Array.where (fun i -> i._type = "function") 
                       |> Array.map solidityFunctionToNetMethod
 
         let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>)
