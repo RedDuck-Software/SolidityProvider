@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30717.126
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SolidityProviderTest", "SolidityProviderTest.fsproj", "{8E13724F-086C-4715-87C3-7038ECA10E69}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E13724F-086C-4715-87C3-7038ECA10E69}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E13724F-086C-4715-87C3-7038ECA10E69}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E13724F-086C-4715-87C3-7038ECA10E69}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E13724F-086C-4715-87C3-7038ECA10E69}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {06D00229-7F2E-4D0A-AE77-EAEC54F058B8}
+	EndGlobalSection
+EndGlobal
