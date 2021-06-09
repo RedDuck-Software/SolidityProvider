@@ -1,5 +1,3 @@
 module SolidityProviderTests
 
-open SolidityProviderImplementation
-
-type Generative2 = SolidityProvider.SolidityTypes<"">
+type Generative2 = SolidityProviderNS.SolidityTypes<"">

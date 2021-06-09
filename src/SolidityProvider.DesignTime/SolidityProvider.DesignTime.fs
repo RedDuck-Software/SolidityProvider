@@ -61,7 +61,7 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
 type SolidityProvider (config:TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("SolidityProvider.DesignTime", "SolidityProvider.Runtime")])
 
-    let ns = "SolidityProviderNS"
+    let ns = "SolidityProviderNamespace"
     let asm = Assembly.GetExecutingAssembly()
     let staticParams = [ProvidedStaticParameter("value", typeof<string>)]
 
