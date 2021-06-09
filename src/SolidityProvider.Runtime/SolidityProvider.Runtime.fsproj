@@ -5,7 +5,7 @@
   <Import Project="..\..\netfx.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>netstandard2.0; net45</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netcoreapp3.1</TargetFrameworks>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
@@ -30,17 +30,12 @@
     <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Restore" />
     <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
     <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
-    <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=net45" />
   </Target>
   <Target Name="AfterBuild">
     <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
     </CreateItem>
     <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp3.1" />
-    <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\net45\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\net45\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries2" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/net45" />
     <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
     </CreateItem>

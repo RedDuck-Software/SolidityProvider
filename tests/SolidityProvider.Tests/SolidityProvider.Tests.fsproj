@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\..\netfx.props" />
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp3.1;</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;</TargetFrameworks>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.4.0" />
-    <PackageReference Include="NUnit3TestAdapter" Version="3.15.1" />
     <ProjectReference Include="..\..\src\SolidityProvider.Runtime\SolidityProvider.Runtime.fsproj">
       <Name>SolidityProvider.Runtime</Name>
       <Project>{7e90d6ce-a10b-4858-a5bc-41df7250cbca}</Project>
