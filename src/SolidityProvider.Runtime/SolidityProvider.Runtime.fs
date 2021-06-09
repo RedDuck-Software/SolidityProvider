@@ -1,6 +1,4 @@
-namespace MyNamespace
-
-open System
+namespace SolidityProviderNamespace
 
 // Put any utilities here
 [<AutoOpen>]
