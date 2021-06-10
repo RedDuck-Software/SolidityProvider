@@ -18,7 +18,8 @@ type Address = string
 type Parameter = {
     internalType:string;
     name:string;
-    _type:string; // todo add annotation
+    [<JsonField("type")>]
+    _type:string;
 }
 
 type Root = {
@@ -28,7 +29,8 @@ type Root = {
     outputs: Parameter array;
     payable: bool;
     stateMutability: string;
-    _type: string; // todo add annotation
+    [<JsonField("type")>]
+    _type: string;
 }
 
 let getAttributeWithParams (attributeType:Type) (args: obj[]) = 
