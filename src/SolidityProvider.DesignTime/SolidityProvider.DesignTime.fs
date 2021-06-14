@@ -63,12 +63,18 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
                 let properties = solTypes |> Array.mapi solidityOutputToNetProperty |> Array.toList
                 // TODO: not sure if we need to add the providedTypeDefinition somewhere
                 let outputType = ProvidedTypeDefinition(functionName |> sprintf "%sOutputDTO", Some <| typeof<FunctionOutputDTO>)
-        
+                
+                let ctor = ProvidedConstructor(
+                            parameters = [], 
+                            invokeCode = fun args -> <@@ functionName :> obj @@>
+                        )
+
                 // throw if we don't find Nethereum's FunctionOutputAttribute
-                asm.GetCustomAttributesData() |> Seq.find (fun i -> i.AttributeType = typeof<FunctionOutputAttribute>)
+                getAttributeWithParams typeof<FunctionOutputAttribute> [||]
                 |> outputType.AddCustomAttribute
 
                 properties |> outputType.AddMembers
+                ctor |> outputType.AddMember
 
                 upcast outputType
 
@@ -86,17 +92,32 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
         let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>)
 
         providedType.AddMembers(Array.toList methods)
+        ProvidedConstructor(
+            parameters = [], 
+            invokeCode = fun args -> <@@ contractName :> obj @@>
+        ) |> providedType.AddMember
+
         providedType
 
     match paramValues with 
     | [| :? string as contractsFolderPath |] -> 
         let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
         let types = Directory.EnumerateFiles(contractsFolderPath) 
-                    |> Seq.map File.ReadAllText 
+                    |> Seq.map File.ReadAllText
+                    |> Seq.map (fun i -> 
+                                        do printfn "ReadAllText %A" i 
+                                        i)
                     |> Seq.map (fun json -> 
-                                let parsedJson = JObject.FromObject(json)
-                                let abiJson = parsedJson.["abi"].ToString()
+                                let parsedJson = JObject.Parse(json)
+                                printfn "parsedJson: %A" parsedJson
+                                let abis = parsedJson.["abi"]
+                                let abiJson = abis.Children<JObject>() 
+                                                |> Seq.where (fun i -> string i.["type"] = "function") 
+                                                |> JArray |> string
+                                printfn "abiJson: %A" abiJson
                                 let contractName = parsedJson.["contractName"].ToString()
+                                printfn "contractName: %A" contractName
+
                                 (contractName, abiJson))
                     |> Seq.map createType
                     |> Seq.toList

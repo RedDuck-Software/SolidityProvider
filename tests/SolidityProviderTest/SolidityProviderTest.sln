@@ -3,7 +3,12 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30717.126
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SolidityProviderTest", "SolidityProviderTest.fsproj", "{8E13724F-086C-4715-87C3-7038ECA10E69}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "SolidityProviderTest", "SolidityProviderTest.fsproj", "{8E13724F-086C-4715-87C3-7038ECA10E69}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A34E39DD-37E9-4ABA-98BC-3D4369543F99}"
+	ProjectSection(SolutionItems) = preProject
+		DebugScript.fsx = DebugScript.fsx
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
