@@ -9,6 +9,8 @@ open Nethereum.ABI.FunctionEncoding.Attributes
 open Newtonsoft.Json.Linq
 open ProviderImplementation.ProvidedTypes
 open SolidityProviderNamespace
+open System.Diagnostics
+open Nethereum.Contracts
 
 [<TypeProviderAssembly>]
 do ()
@@ -47,6 +49,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
         let solidityTypeToNetType solType = typeof<bigint>
 
         let solidityOutputToNetProperty index (output:Parameter) =
+            Debug.WriteLine(sprintf "index: %A | output: %A" index output)
             let netType = solidityTypeToNetType output._type
             let name = if output.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else output.name
             let property = ProvidedProperty(name, netType)
@@ -56,55 +59,61 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
         
             property
 
-        let solidityOutputTypesToNetReturnType (functionName:string) (solTypes:Parameter array) =
+        let solidityTypesToNetDTO (functionName:string) (solTypes:Parameter array) isOutput =
+            Debug.WriteLine(sprintf "functionName: %A | solTypes: %A" functionName solTypes)
             match Array.length solTypes with
-              | 1 -> solTypes |> Array.head |> solidityTypeToNetType
+              | 1 -> solTypes |> Array.head |> solidityTypeToNetType, None
               | _ ->
                 let properties = solTypes |> Array.mapi solidityOutputToNetProperty |> Array.toList
                 // TODO: not sure if we need to add the providedTypeDefinition somewhere
-                let outputType = ProvidedTypeDefinition(functionName |> sprintf "%sOutputDTO", Some <| typeof<FunctionOutputDTO>)
-                
-                let ctor = ProvidedConstructor(
-                            parameters = [], 
-                            invokeCode = fun args -> <@@ functionName :> obj @@>
-                        )
+                let (postfix, baseType, attribute) = 
+                        if isOutput 
+                            then ("OutputDTO", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
+                            else ("Function",
+                                    typeof<FunctionMessage>,
+                                    getAttributeWithParams typeof<FunctionAttribute> [|functionName;typeof<FunctionOutputAttribute>|]) // todo here we need to know about all outputDTOs
 
-                // throw if we don't find Nethereum's FunctionOutputAttribute
-                getAttributeWithParams typeof<FunctionOutputAttribute> [||]
-                |> outputType.AddCustomAttribute
+                let netType = ProvidedTypeDefinition(sprintf "%s%s" functionName postfix, Some <| baseType, isErased=false)
+                let ctor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
 
-                properties |> outputType.AddMembers
-                ctor |> outputType.AddMember
+                attribute |> netType.AddCustomAttribute
+                properties |> netType.AddMembers
+                ctor |> netType.AddMember
 
-                upcast outputType
+                (upcast netType, Some netType)
 
+        // todo here - restructure to first process output then input
         let solidityFunctionToNetMethod (solidityFunction:Root) = 
-            let parameters = solidityFunction.inputs
-                             |> Array.map (fun j -> ProvidedParameter(j.name, solidityTypeToNetType j.internalType))
-                             |> Array.toList
-            let returnType = solidityOutputTypesToNetReturnType solidityFunction.name solidityFunction.outputs
-            ProvidedMethod(solidityFunction.name, parameters, returnType)
+            let (returnTypeIn, typeToAddIn) = solidityTypesToNetDTO solidityFunction.name solidityFunction.inputs false
+            let (returnTypeOut, typeToAddOut) = solidityTypesToNetDTO solidityFunction.name solidityFunction.outputs true
+            
+            let functionType = ProvidedTypeDefinition(sprintf "%sFunctionTypes" solidityFunction.name, Some <| typeof<obj>, hideObjectMethods = true, isErased=false)
+            functionType.AddMembers <| [returnTypeOut;returnTypeIn]
 
-        let methods = roots
+            functionType, [typeToAddIn;typeToAddOut] |> List.choose (fun i -> i)
+
+        let functionDTOsAndTypesToAdd = 
+                      roots
                       |> Array.where (fun i -> i._type = "function") 
                       |> Array.map solidityFunctionToNetMethod
 
-        let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>)
+        let functionDTOs = functionDTOsAndTypesToAdd |> Array.map fst
+        let typesToAdd = functionDTOsAndTypesToAdd |> Array.map snd |> Array.toList |> List.fold (fun currentList list -> List.concat [currentList;list]) []
 
-        providedType.AddMembers(Array.toList methods)
-        ProvidedConstructor(
-            parameters = [], 
-            invokeCode = fun args -> <@@ contractName :> obj @@>
-        ) |> providedType.AddMember
+        let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>, isErased=false)
 
-        providedType
+        providedType.AddMembers (Array.toList functionDTOs)
+        providedType.AddMember <| ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+
+        (providedType, typesToAdd)
 
     match paramValues with 
     | [| :? string as contractsFolderPath |] -> 
-        let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
-        let types = Directory.EnumerateFiles(contractsFolderPath) 
+        let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
+        let (contractTypes, typesToAddToAssembly) = 
+                    Directory.EnumerateFiles(contractsFolderPath) 
                     |> Seq.map File.ReadAllText
-                    |> Seq.map (fun i -> 
+                    |> Seq.map (fun i ->
                                         do printfn "ReadAllText %A" i 
                                         i)
                     |> Seq.map (fun json -> 
@@ -121,13 +130,17 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
                                 (contractName, abiJson))
                     |> Seq.map createType
                     |> Seq.toList
+                    |> List.fold (fun (contractTypes, typesToAdd1) (contractType, typesToAdd2) -> (contractType::contractTypes, List.concat [typesToAdd1;typesToAdd2])) ([], [])
+        
+        let asm = ProvidedAssembly()
+        List.concat [contractTypes; typesToAddToAssembly] |> asm.AddTypes
 
-        rootType.AddMembers types    
+        rootType.AddMembers contractTypes
         rootType
 
 [<TypeProvider>]
 type SolidityProvider (config:TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("SolidityProvider.DesignTime", "SolidityProvider.Runtime")])
+    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("SolidityProvider.DesignTime", "SolidityProvider")])
 
     let ns = "SolidityProviderNS"
     let asm = Assembly.GetExecutingAssembly()
@@ -136,8 +149,8 @@ type SolidityProvider (config:TypeProviderConfig) as this =
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
     do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, hideObjectMethods = true)
+    let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, hideObjectMethods = true, isErased=false)
 
     do t.DefineStaticParameters(staticParams, constructRootType asm ns)
-
+    
     do this.AddNamespace(ns, [t])

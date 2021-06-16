@@ -6,9 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="dEth.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Compile Include="Program.fs" />
   </ItemGroup>
 
