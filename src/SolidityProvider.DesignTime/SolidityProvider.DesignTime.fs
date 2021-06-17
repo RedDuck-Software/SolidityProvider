@@ -48,13 +48,13 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
         // mock for a while
         let solidityTypeToNetType solType = typeof<bigint>
 
-        let solidityOutputToNetProperty index (output:Parameter) =
-            Debug.WriteLine(sprintf "index: %A | output: %A" index output)
-            let netType = solidityTypeToNetType output._type
-            let name = if output.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else output.name
+        let solidityOutputToNetProperty index (param:Parameter) =
+            Debug.WriteLine(sprintf "index: %A | output: %A" index param)
+            let netType = solidityTypeToNetType param._type
+            let name = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
             let property = ProvidedProperty(name, netType)
         
-            getAttributeWithParams typeof<ParameterAttribute> [|output._type;output.name;index+1|]
+            getAttributeWithParams typeof<ParameterAttribute> [|param._type;param.name;index+1|]
             |> property.AddCustomAttribute
         
             property
@@ -69,9 +69,9 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
                 let (postfix, baseType, attribute) = 
                         if isOutput 
                             then ("OutputDTO", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
-                            else ("Function",
-                                    typeof<FunctionMessage>,
-                                    getAttributeWithParams typeof<FunctionAttribute> [|functionName;typeof<FunctionOutputAttribute>|]) // todo here we need to know about all outputDTOs
+                            else ("Function", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
+                                    //typeof<FunctionMessage>,
+                                    //getAttributeWithParams typeof<FunctionAttribute> [|functionName;typeof<FunctionOutputAttribute>|]) // todo here we need to know about all outputDTOs
 
                 let netType = ProvidedTypeDefinition(sprintf "%s%s" functionName postfix, Some <| baseType, isErased=false)
                 let ctor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
