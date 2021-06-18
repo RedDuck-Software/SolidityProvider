@@ -56,41 +56,38 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (paramValues:
         
             getAttributeWithParams typeof<ParameterAttribute> [|param._type;param.name;index+1|]
             |> property.AddCustomAttribute
-        
+
             property
 
         let solidityTypesToNetDTO (functionName:string) (solTypes:Parameter array) isOutput =
             Debug.WriteLine(sprintf "functionName: %A | solTypes: %A" functionName solTypes)
-            match Array.length solTypes with
-              | 1 -> solTypes |> Array.head |> solidityTypeToNetType, None
-              | _ ->
-                let properties = solTypes |> Array.mapi solidityOutputToNetProperty |> Array.toList
-                // TODO: not sure if we need to add the providedTypeDefinition somewhere
-                let (postfix, baseType, attribute) = 
-                        if isOutput 
-                            then ("OutputDTO", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
-                            else ("Function", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
-                                    //typeof<FunctionMessage>,
-                                    //getAttributeWithParams typeof<FunctionAttribute> [|functionName;typeof<FunctionOutputAttribute>|]) // todo here we need to know about all outputDTOs
+            let properties = solTypes |> Array.mapi solidityOutputToNetProperty |> Array.toList
 
-                let netType = ProvidedTypeDefinition(sprintf "%s%s" functionName postfix, Some <| baseType, isErased=false)
-                let ctor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+            let (postfix, baseType, attribute) = 
+                    if isOutput
+                        then ("OutputDTO", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
+                        else ("Function", typeof<FunctionOutputDTO>, getAttributeWithParams typeof<FunctionOutputAttribute> [||])
+                                //typeof<FunctionMessage>,
+                                //getAttributeWithParams typeof<FunctionAttribute> [|functionName;typeof<FunctionOutputAttribute>|]) // todo here we need to know about all outputDTOs
 
-                attribute |> netType.AddCustomAttribute
-                properties |> netType.AddMembers
-                ctor |> netType.AddMember
+            let netType = ProvidedTypeDefinition(sprintf "%s%s" functionName postfix, Some <| baseType, isErased=false)
+            let ctor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
 
-                (upcast netType, Some netType)
+            attribute |> netType.AddCustomAttribute
+            properties |> netType.AddMembers
+            ctor |> netType.AddMember
+
+            netType
 
         // todo here - restructure to first process output then input
         let solidityFunctionToNetMethod (solidityFunction:Root) = 
-            let (returnTypeIn, typeToAddIn) = solidityTypesToNetDTO solidityFunction.name solidityFunction.inputs false
-            let (returnTypeOut, typeToAddOut) = solidityTypesToNetDTO solidityFunction.name solidityFunction.outputs true
+            let returnTypeIn = solidityTypesToNetDTO solidityFunction.name solidityFunction.inputs false
+            let returnTypeOut = solidityTypesToNetDTO solidityFunction.name solidityFunction.outputs true
             
             let functionType = ProvidedTypeDefinition(sprintf "%sFunctionTypes" solidityFunction.name, Some <| typeof<obj>, hideObjectMethods = true, isErased=false)
             functionType.AddMembers <| [returnTypeOut;returnTypeIn]
 
-            functionType, [typeToAddIn;typeToAddOut] |> List.choose (fun i -> i)
+            functionType, [returnTypeIn;returnTypeOut]
 
         let functionDTOsAndTypesToAdd = 
                       roots
