@@ -1,11 +1,15 @@
+#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.ABI.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\netcoreapp3.1\SolidityProvider.Runtime.dll"
 
 [<Literal>]
-let rootFolder = @"C:\Users\user\Git\SolidityProvider"
+let rootFolder = @"C:\Users\Ilyas\redDuck\SolidityProvider"
 
 [<Literal>]
 let path = rootFolder + @"\Playground\Contracts"
 
-type a = SolidityProviderNS.SolidityTypes<path>
+type A = SolidityProviderNS.SolidityTypes<path>
 
-let dEth = a.dETHContract ()
+//printfn "%A" A
+let dEth = A.dETHContract ()
+
+printfn "%A" dEth
