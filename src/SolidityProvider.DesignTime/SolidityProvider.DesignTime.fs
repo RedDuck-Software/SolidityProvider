@@ -8,10 +8,12 @@ open FSharp.Json
 open Nethereum.ABI.FunctionEncoding.Attributes
 open Newtonsoft.Json.Linq
 open ProviderImplementation.ProvidedTypes
+open ProviderImplementation.ProvidedTypes.UncheckedQuotations
 open SolidityProviderNamespace
 open System.Diagnostics
 open Nethereum.Contracts
 open Microsoft.FSharp.Quotations
+open System.Collections.Generic
 
 [<TypeProviderAssembly>]
 do ()
@@ -55,7 +57,6 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
 let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) = 
     let createType (contractName, abi:JEnumerable<JObject>) =
 
-        // mock for a while
         let solidityTypeToNetType solType = 
             match solType with
             | "uint256" -> typeof<bigint>
@@ -63,24 +64,34 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
             | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
             | _ -> typeof<string>
 
-        let solidityOutputToNetProperty index (param:Parameter) =
-            Debug.WriteLine(sprintf "index: %A | output: %A" index param)
+        let addProperty (provideType: ProvidedTypeDefinition) index (param:Parameter)  =
+
+            Debug.WriteLine(sprintf "Proprty name: %A; index: %i" param.name index)
             let netType = solidityTypeToNetType param._type
-            let name = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
-            let property = ProvidedField(name, netType)
-            property.SetFieldAttributes(FieldAttributes.Public)
+            let propertyName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+
+            let field = ProvidedField("_" + propertyName, netType)
+
+            let getter = fun [this] -> Expr.FieldGetUnchecked(this, field)
+            let setter = fun [this; v] -> Expr.FieldSetUnchecked(this, field, v)
+            let property = ProvidedProperty(propertyName, netType, isStatic = false, getterCode = getter, setterCode = setter)
 
             getAttributeWithParams typeof<ParameterAttribute> [|param._type;param.name;index+1|]
             |> property.AddCustomAttribute
 
-            property
+            provideType.AddMember property
+            provideType.AddMember field
+            ()
 
 
-        let makeSolidityType name baseType inputs = 
+        let makeSolidityType name baseType (inputs: Parameter seq) = 
             let solidityType = ProvidedTypeDefinition(name, Some <| baseType , hideObjectMethods = true, isErased=false)
-            let properties = inputs |> Seq.mapi solidityOutputToNetProperty |> Seq.toList
-            solidityType.AddMembers properties
-            solidityType.AddMember <| ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+
+            let constructor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+
+            inputs |> Seq.iteri (addProperty solidityType)
+
+            solidityType.AddMember constructor
             solidityType
 
         let getTypes (json: JObject) =
@@ -94,7 +105,7 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
                 [functionType; functionOutputType]
             | "event" -> 
                 let dto = Json.deserialize<EventJsonDTO> (string json) 
-                let eventType =  makeSolidityType (sprintf "%sEventDTO" dto.name) typeof<EventDTO> dto.inputs
+                let eventType =  makeSolidityType (sprintf "%sEventDTO" dto.name) typeof<obj> dto.inputs //EventDTO
 
                 [eventType]
             | "constructor" ->
@@ -115,11 +126,11 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
         providedType.AddMember <| ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
         providedType.AddMembers(solidityTypes)
         asm.AddTypes([providedType])
-        (providedType, [])
+        providedType
 
     match paramValues with 
     | [| :? string as contractsFolderPath |] -> 
-        let (contractTypes, typesToAddToAssembly) = 
+        let contractTypes = 
                     Directory.EnumerateFiles(contractsFolderPath) 
                     |> Seq.map File.ReadAllText
                     |> Seq.map (fun i ->
@@ -137,7 +148,7 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
                                 (contractName, abiJson))
                     |> Seq.map createType
                     |> Seq.toList
-                    |> List.fold (fun (contractTypes, typesToAdd1) (contractType, typesToAdd2) -> (contractType::contractTypes, List.concat [typesToAdd1;typesToAdd2])) ([], [])
+                    |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
 
         let asm = ProvidedAssembly()
         let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)

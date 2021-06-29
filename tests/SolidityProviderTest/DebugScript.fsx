@@ -18,10 +18,13 @@ let dEth = A.dETHContract ()
 
 let allowance = A.dETHContract.allowanceFunction()
 let allowanceOut = A.dETHContract.allowanceOutputDTO()
+printfn "before change: %A" allowanceOut.Prop0
+allowanceOut.Prop0 <- System.Numerics.BigInteger 1
+printfn "after change: %A" allowanceOut.Prop0
 
 let approval = A.dETHContract.ApprovalEventDTO()
-let settings = A.dETHContract.AutomationSettingsChangedEventDTO()
 
-let deployment = A.dETHContract.dETHDeployment()
+let settings = A.dETHContract.AutomationSettingsChangedEventDTO()
+//let deployment = A.dETHContract.dETHDeployment()
 
 
