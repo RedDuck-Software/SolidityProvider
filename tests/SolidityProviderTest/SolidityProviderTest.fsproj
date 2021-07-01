@@ -25,4 +25,10 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="SolidityProvider.Runtime">
+      <HintPath>..\..\..\..\..\..\Share\SolidityProvider.Runtime.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

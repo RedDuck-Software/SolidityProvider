@@ -48,6 +48,13 @@ type FunctionJsonDTO = {
     stateMutability: string;
 }
 
+
+let getAttribute (attributeType:Type)  = 
+    { new Reflection.CustomAttributeData() with
+        member __.Constructor = attributeType.GetConstructor(Type.EmptyTypes)
+        member __.ConstructorArguments = [||] :> IList<_>
+        member __.NamedArguments = [||] :> IList<_> }
+
 let getAttributeWithParams (attributeType:Type) (args: obj[]) = 
     { new Reflection.CustomAttributeData() with
         member __.Constructor = args |> Array.map (fun i -> i.GetType()) |> attributeType.GetConstructor
@@ -94,18 +101,31 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
             solidityType.AddMember constructor
             solidityType
 
-        let getTypes (json: JObject) =
+        let getTypes nameSufix (json: JObject) =
             
             match string json.["type"] with
             | "function" -> 
                 let dto = Json.deserialize<FunctionJsonDTO> (string json) 
-                let functionType = makeSolidityType (sprintf "%sFunction" dto.name) typeof<FunctionMessage> dto.inputs
-                let functionOutputType = makeSolidityType (sprintf "%sOutputDTO" dto.name) typeof<FunctionOutputDTO> dto.outputs
+                let functionType = makeSolidityType (sprintf "%s%sFunction" dto.name nameSufix) typeof<FunctionMessage> dto.inputs
+                let functionOutputType = makeSolidityType (sprintf "%s%sOutputDTO" dto.name nameSufix) typeof<FunctionOutputDTO> dto.outputs
+                
+                functionOutputType.AddCustomAttribute (getAttribute typeof<FunctionOutputAttribute>)
 
-                [functionType; functionOutputType]
+                match dto.outputs with
+                | [||] -> 
+                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name|])
+                | [|param|] -> 
+                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; param._type|])
+                | _ -> 
+                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; functionOutputType|])
+                
+
+                [functionOutputType; functionType]
             | "event" -> 
                 let dto = Json.deserialize<EventJsonDTO> (string json) 
                 let eventType =  makeSolidityType (sprintf "%sEventDTO" dto.name) typeof<obj> dto.inputs //EventDTO
+                
+                eventType.AddCustomAttribute (getAttributeWithParams typeof<EventAttribute> [|dto.name|])
 
                 [eventType]
             | "constructor" ->
@@ -116,7 +136,26 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
             | _ -> []
 
         
-        let solidityTypes = abi |> Seq.collect getTypes |> Seq.toList
+        let solidityTypes = 
+            abi 
+            |> Seq.groupBy(fun json -> 
+                 let _type = string json.["type"]
+                 let _name = 
+                    match json.TryGetValue "name" with
+                    | true, v -> string v
+                    | _ -> "Noname"
+                 _type + _name
+            )
+            |> Seq.collect(fun (_,group) ->
+                match group |> Seq.toList with
+                | [] -> []
+                | [json] -> getTypes "" json
+                | headJson::tailJson -> 
+                    let headTypes = getTypes "" headJson
+                    let tailTypes = tailJson |> List.mapi(fun i json -> getTypes (sprintf "%i" (i + 1)) json) |> List.collect id
+                    List.append headTypes tailTypes
+                 )
+            |> Seq.toList
 
         let asm = ProvidedAssembly()
         asm.AddTypes(solidityTypes)
