@@ -21,15 +21,18 @@ description
 tags
     F# fsharp typeproviders SolidityProvider
 files
-    bin/Release/net45/SolidityProvider.Runtime.* ==> lib/net45
+    #bin/Release/net45/SolidityProvider.Runtime.* ==> lib/net45
     bin/Release/netstandard2.0/SolidityProvider.Runtime.* ==> lib/netstandard2.0
     bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
     bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
-    bin/Release/typeproviders/fsharp41/net45/*.dll ==> typeproviders/fsharp41/net45
+    #bin/Release/typeproviders/fsharp41/net45/*.dll ==> typeproviders/fsharp41/net45
 references
     SolidityProvider.Runtime.dll
 dependencies
   FSharp.Core >= LOCKEDVERSION
+  FSharp.Json >= 0.4.0
+  Nethereum.ABI >= 3.8.0
+  Nethereum.Contracts >= 3.8.0
 
 # put any package references here
 #  Some.Package

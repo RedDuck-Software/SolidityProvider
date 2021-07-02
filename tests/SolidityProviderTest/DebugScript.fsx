@@ -14,17 +14,24 @@ let path = rootFolder + @"\Playground\Contracts"
 type A = SolidityProviderNS.SolidityTypes<path>
 
 //printfn "%A" A
-let dEth = A.dETHContract ()
+let dEth = A.dEthContract ()
 
-let allowance = A.dETHContract.allowanceFunction()
-let allowanceOut = A.dETHContract.allowanceOutputDTO()
-printfn "before change: %A" allowanceOut.Prop0
-allowanceOut.Prop0 <- System.Numerics.BigInteger 1
-printfn "after change: %A" allowanceOut.Prop0
+let allowance = A.dEthContract.allowanceFunction()
+//let allowanceOut = A.dETHContract.allowanceOutputDTO()
+//printfn "before change: %A" allowanceOut.Prop0
+//allowanceOut.Prop0 <- System.Numerics.BigInteger 1
+//printfn "after change: %A" allowanceOut.Prop0
 
-let approval = A.dETHContract.ApprovalEventDTO()
+//let approval = A.dETHContract.ApprovalEventDTO()
 
-let settings = A.dETHContract.AutomationSettingsChangedEventDTO()
+//let settings = A.dETHContract.AutomationSettingsChangedEventDTO()
 //let deployment = A.dETHContract.dETHDeployment()
+
+[| typeof<A.dEthContract.getCollateralFunction> |]
+|> Array.map (fun t ->
+        printfn "--- %s ---" t.Name
+        t.GetCustomAttributes(typeof<FunctionAttribute>, false)
+        |> Array.map (fun attr -> (attr :?> FunctionAttribute).DTOReturnType |> printfn "%A")
+    )
 
 
