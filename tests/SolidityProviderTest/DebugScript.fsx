@@ -8,10 +8,7 @@ open Nethereum.ABI.FunctionEncoding.Attributes
 [<Literal>]
 let rootFolder = @"C:\Users\Ilyas\redDuck\SolidityProvider"
 
-[<Literal>]
-let path = rootFolder + @"\Playground\Contracts"
-
-type A = SolidityProviderNS.SolidityTypes<path>
+type A = SolidityProviderNS.SolidityTypes< "", rootFolder>
 
 //printfn "%A" A
 let dEth = A.dEthContract ()
