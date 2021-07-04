@@ -61,7 +61,7 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
         member __.ConstructorArguments = args |> Array.map (fun i -> CustomAttributeTypedArgument(i.GetType(), i)) :> Collections.Generic.IList<_>
         member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
 
-let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) = 
+let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
     let createType (contractName, abi:JEnumerable<JObject>) =
 
         let solidityTypeToNetType solType = 
@@ -167,34 +167,48 @@ let constructRootType (ns:string) (typeName:string) (paramValues: obj[]) =
         asm.AddTypes([providedType])
         providedType
 
-    match paramValues with 
-    | [| :? string as contractsFolderPath |] -> 
-        let contractTypes = 
-                    Directory.EnumerateFiles(contractsFolderPath) 
-                    |> Seq.map File.ReadAllText
-                    |> Seq.map (fun i ->
-                                        //do printfn "ReadAllText %A" i 
-                                        i)
-                    |> Seq.map (fun json -> 
-                                let parsedJson = JObject.Parse(json)
-                                //printfn "parsedJson: %A" parsedJson
-                                let abis = parsedJson.["abi"]
-                                let abiJson = abis.Children<JObject>() //|> string
-                                //printfn "abiJson: %A" abiJson
-                                let contractName = parsedJson.["contractName"].ToString()
-                                printfn "contractName: %A" contractName
+    let contractsFolderPath = paramValues.[0] :?> string
+    let resolutionFolder = paramValues.[1] :?> string
 
-                                (contractName, abiJson))
-                    |> Seq.map createType
-                    |> Seq.toList
-                    |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
+    let fullPath = 
+        match Uri.TryCreate(contractsFolderPath, UriKind.RelativeOrAbsolute) with
+        | true, uri -> 
+            if uri.IsAbsoluteUri then
+                contractsFolderPath
+            else
+                let root = 
+                    if String.IsNullOrWhiteSpace resolutionFolder then 
+                        cfg.ResolutionFolder
+                    else resolutionFolder
+                Path.Combine(root, contractsFolderPath)
+        | _ -> 
+            if String.IsNullOrWhiteSpace resolutionFolder then 
+                cfg.ResolutionFolder 
+            else resolutionFolder
 
-        let asm = ProvidedAssembly()
-        let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
+    let contractTypes = 
+        Directory.EnumerateFiles(fullPath, "*.json") 
+        |> Seq.map File.ReadAllText
+        |> Seq.map (fun json -> 
+                    let parsedJson = JObject.Parse(json)
+                    //printfn "parsedJson: %A" parsedJson
+                    let abis = parsedJson.["abi"]
+                    let abiJson = abis.Children<JObject>() //|> string
+                    //printfn "abiJson: %A" abiJson
+                    let contractName = parsedJson.["contractName"].ToString()
+                    printfn "contractName: %A" contractName
+
+                    (contractName, abiJson))
+        |> Seq.map createType
+        |> Seq.toList
+        |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
+
+    let asm = ProvidedAssembly()
+    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
         
-        rootType.AddMembers contractTypes
-        asm.AddTypes([rootType])
-        rootType
+    rootType.AddMembers contractTypes
+    asm.AddTypes([rootType])
+    rootType
 
 [<TypeProvider>]
 type SolidityProvider (config:TypeProviderConfig) as this =
@@ -203,13 +217,16 @@ type SolidityProvider (config:TypeProviderConfig) as this =
     let ns = "SolidityProviderNS"
     let asm = Assembly.GetExecutingAssembly()
 
-    let staticParams = [ProvidedStaticParameter("value", typeof<string>)]
+    let staticParams = [
+        ProvidedStaticParameter("ContractsFolderPath", typeof<string>)
+        ProvidedStaticParameter("ResolutionFolder", typeof<string>, parameterDefaultValue = "")
+    ]
 
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
     do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)
 
     let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased=false)
 
-    do t.DefineStaticParameters(staticParams, constructRootType ns)
+    do t.DefineStaticParameters(staticParams, constructRootType ns config)
     
     do this.AddNamespace(ns, [t])
