@@ -1,25 +1,24 @@
 type file
 id SolidityProvider
+title
+    Type provider for convenient integration of Solidity ABI files and Nethereum
 authors
-    Steffen Forkmann, Gustavo Guerra, JohnDoeKyrgyz, Don Syme
-owners
-    Steffen Forkmann, Gustavo Guerra, JohnDoeKyrgyz, Don Syme
+    Mark Virchenko, Ilyas Rahimov, Michael Prokazin
 projectUrl
-    http://github.com/fsprojects/SolidityProvider
+    https://github.com/RedDuck-Software/SolidityProvider
 iconUrl
-    https://raw.githubusercontent.com/fsprojects/SolidityProvider/master/docs/files/img/logo.png
+    https://raw.githubusercontent.com/RedDuck-Software/SolidityProvider/master/misc/logo82x128.png
 licenseUrl
-    http://github.com/fsprojects/SolidityProvider/blob/master/LICENSE.txt
+    https://github.com/RedDuck-Software/SolidityProvider/blob/master/LICENSE.md
 requireLicenseAcceptance
     false
 tags
-    F# fsharp typeproviders SolidityProvider
+    F# FSharp typeprovider Solidity Ethereum SolidityProvider Nethereum
 summary
     This library is for the .NET platform implementing SolidityProvider.
 description
     This library is for the .NET platform implementing SolidityProvider.
-tags
-    F# fsharp typeproviders SolidityProvider
+licenseExpression MIT
 files
     #bin/Release/net45/SolidityProvider.Runtime.* ==> lib/net45
     bin/Release/netstandard2.0/SolidityProvider.Runtime.* ==> lib/netstandard2.0
@@ -40,3 +39,6 @@ dependencies
 #    System.Text.Encoding.CodePages >= LOCKEDVERSION
 #  framework: netstandard2.0
 #    System.Text.Encoding.CodePages >= LOCKEDVERSION
+
+releaseNotes
+    Type provider for use with Nethereum
