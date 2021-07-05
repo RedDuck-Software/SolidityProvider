@@ -62,7 +62,7 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
         member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
 
 let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
-    let createType (contractName, abi:JEnumerable<JObject>) =
+    let createType (fileName: string, contractName, abi:JEnumerable<JObject>) =
 
         let solidityTypeToNetType solType = 
             match solType with
@@ -163,6 +163,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
         let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>, isErased=false)
 
         providedType.AddMember <| ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+        providedType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
         providedType.AddMembers(solidityTypes)
         asm.AddTypes([providedType])
         providedType
@@ -188,24 +189,24 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
 
     let contractTypes = 
         Directory.EnumerateFiles(fullPath, "*.json") 
-        |> Seq.map File.ReadAllText
-        |> Seq.map (fun json -> 
-                    let parsedJson = JObject.Parse(json)
-                    //printfn "parsedJson: %A" parsedJson
-                    let abis = parsedJson.["abi"]
-                    let abiJson = abis.Children<JObject>() //|> string
-                    //printfn "abiJson: %A" abiJson
-                    let contractName = parsedJson.["contractName"].ToString()
-                    printfn "contractName: %A" contractName
+        |> Seq.map(fun fileName -> 
+            let json = File.ReadAllText fileName
+            let parsedJson = JObject.Parse(json)
+            //printfn "parsedJson: %A" parsedJson
+            let abis = parsedJson.["abi"]
+            let abiJson = abis.Children<JObject>() //|> string
+            //printfn "abiJson: %A" abiJson
+            let contractName = parsedJson.["contractName"].ToString()
+            printfn "contractName: %A" contractName
 
-                    (contractName, abiJson))
+            (fileName, contractName, abiJson))
         |> Seq.map createType
         |> Seq.toList
         |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
 
     let asm = ProvidedAssembly()
     let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
-        
+    rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fullPath @@>)
     rootType.AddMembers contractTypes
     asm.AddTypes([rootType])
     rootType
