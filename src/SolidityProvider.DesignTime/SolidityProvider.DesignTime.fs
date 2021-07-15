@@ -29,22 +29,22 @@ type Parameter = {
 
 type ConstructorJsonDTO = {
     inputs: Parameter array;
-    payable: bool;
+    payable: bool option;
     stateMutability: string;
 }
 
 type EventJsonDTO = {
     inputs: Parameter array;
     name: string;
-    anonymous: bool;
+    anonymous: bool option;
 }
 
 type FunctionJsonDTO = {
-    constant: bool;
+    constant: bool option;
     inputs: Parameter array;
     name: string;
     outputs: Parameter array;
-    payable: bool;
+    payable: bool option;
     stateMutability: string;
 }
 
