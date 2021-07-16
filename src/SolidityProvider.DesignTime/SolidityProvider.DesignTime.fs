@@ -21,6 +21,7 @@ do ()
 type Address = string
 
 type Parameter = {
+    indexed: bool option
     internalType:string;
     name:string;
     [<JsonField("type")>]
@@ -29,22 +30,22 @@ type Parameter = {
 
 type ConstructorJsonDTO = {
     inputs: Parameter array;
-    payable: bool;
+    payable: bool option;
     stateMutability: string;
 }
 
 type EventJsonDTO = {
     inputs: Parameter array;
     name: string;
-    anonymous: bool;
+    anonymous: bool option;
 }
 
 type FunctionJsonDTO = {
-    constant: bool;
+    constant: bool option;
     inputs: Parameter array;
     name: string;
     outputs: Parameter array;
-    payable: bool;
+    payable: bool option;
     stateMutability: string;
 }
 
@@ -68,6 +69,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             match solType with
             | "uint256" -> typeof<bigint>
             | "address" -> typeof<string>
+            | "bool" -> typeof<bool>
             | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
             | _ -> typeof<string>
 
@@ -83,7 +85,12 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             let setter = fun [this; v] -> Expr.FieldSetUnchecked(this, field, v)
             let property = ProvidedProperty(propertyName, netType, isStatic = false, getterCode = getter, setterCode = setter)
 
-            getAttributeWithParams typeof<ParameterAttribute> [|param._type;param.name;index+1|]
+            let attrs: obj [] = 
+                match param.indexed with
+                | Some indexed -> [|param._type;param.name;index+1;indexed|]
+                | None -> [|param._type;param.name;index+1|]
+
+            getAttributeWithParams typeof<ParameterAttribute> attrs
             |> property.AddCustomAttribute
 
             provideType.AddMember property

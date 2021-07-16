@@ -9,7 +9,7 @@ projectUrl
 iconUrl
     https://raw.githubusercontent.com/RedDuck-Software/SolidityProvider/master/misc/logo82x128.png
 licenseUrl
-    https://github.com/RedDuck-Software/SolidityProvider/blob/master/LICENSE.md
+    https://licenses.nuget.org/GPL-3.0-or-later
 requireLicenseAcceptance
     false
 tags
