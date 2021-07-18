@@ -10,13 +10,23 @@ open Newtonsoft.Json.Linq
 open ProviderImplementation.ProvidedTypes
 open ProviderImplementation.ProvidedTypes.UncheckedQuotations
 open SolidityProviderNamespace
-open System.Diagnostics
 open Nethereum.Contracts
 open Microsoft.FSharp.Quotations
 open System.Collections.Generic
+open System.Threading.Tasks
+open Nethereum.RPC.Eth.DTOs
+open Nethereum.Web3
+open System.Numerics
+
 
 [<TypeProviderAssembly>]
 do ()
+
+
+type DataObject() =
+    let data = Dictionary<string,obj>()
+    member x.RuntimeOperation() = data.Count
+
 
 type Address = string
 
@@ -50,9 +60,22 @@ type FunctionJsonDTO = {
 }
 
 
+let solidityTypeToNetType solType = 
+    match solType with
+    | "uint256" | "unit160" | "uint128" | "uint80" | "int256" | "int160" | "int128" | "int80" -> typeof<BigInteger>
+    | "uint8" -> typeof<uint8>
+    | "uint16" -> typeof<uint16>
+    | "uint32" -> typeof<uint32>
+    | "uint64" -> typeof<uint64>
+    | "address" -> typeof<string>
+    | "bool" -> typeof<bool>
+    | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
+    | _ -> typeof<string>
+
+
 let getAttribute (attributeType:Type)  = 
     { new Reflection.CustomAttributeData() with
-        member __.Constructor = attributeType.GetConstructor(Type.EmptyTypes)
+        member __.Constructor = attributeType.GetConstructor([||])
         member __.ConstructorArguments = [||] :> IList<_>
         member __.NamedArguments = [||] :> IList<_> }
 
@@ -63,26 +86,24 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
         member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
 
 let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
-    let createType (fileName: string, contractName, abi:JEnumerable<JObject>) =
+    let createType (fileName: string, contractName, abis:JToken) =
+        
+        let etherConn = ProvidedField("_etherConn", typeof<EthereumConnection>)
+        let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
 
-        let solidityTypeToNetType solType = 
-            match solType with
-            | "uint256" -> typeof<bigint>
-            | "address" -> typeof<string>
-            | "bool" -> typeof<bool>
-            | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
-            | _ -> typeof<string>
+        let getPropertyName index (param:Parameter) = 
+            if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
 
-        let addProperty (provideType: ProvidedTypeDefinition) index (param:Parameter)  =
-
-            Debug.WriteLine(sprintf "Proprty name: %A; index: %i" param.name index)
+        let makeField index (param:Parameter) =
             let netType = solidityTypeToNetType param._type
-            let propertyName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+            let fieldName = "_" + (getPropertyName index param)
+            ProvidedField(fieldName, netType)
 
-            let field = ProvidedField("_" + propertyName, netType)
-
-            let getter = fun [this] -> Expr.FieldGetUnchecked(this, field)
-            let setter = fun [this; v] -> Expr.FieldSetUnchecked(this, field, v)
+        let makeProperty index (field: ProvidedField) (param:Parameter) =
+            let propertyName = getPropertyName index param
+            let netType = solidityTypeToNetType param._type
+            let getter = fun [this] -> Expr.FieldGet(this, field)
+            let setter = fun [this; v] -> Expr.FieldSet(this, field, v)
             let property = ProvidedProperty(propertyName, netType, isStatic = false, getterCode = getter, setterCode = setter)
 
             let attrs: obj [] = 
@@ -93,29 +114,86 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             getAttributeWithParams typeof<ParameterAttribute> attrs
             |> property.AddCustomAttribute
 
-            provideType.AddMember property
-            provideType.AddMember field
-            ()
+            property
 
 
-        let makeSolidityType name baseType (inputs: Parameter seq) = 
-            let solidityType = ProvidedTypeDefinition(name, Some <| baseType , hideObjectMethods = true, isErased=false)
+        let makeFunctionMethods name (inputs: Parameter seq) =
+            let parametrList = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param._type
+                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
 
-            let constructor = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+            let invokeCode (args: Expr list) :Expr =
+                match args with
+                | [] -> failwith "not args"
+                | this::tail -> 
+                    let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                    let ctr = Expr.FieldGet(this, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[])
+                    @@>
 
-            inputs |> Seq.iteri (addProperty solidityType)
+            let invokeCodeAsync (args: Expr list) :Expr =
+                match args with
+                | [] -> failwith "not args"
+                | this::tail -> 
+                    let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                    let ctr = Expr.FieldGet(this, contractPlug)
+                    <@@ 
+                         (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[])
+                    @@>
 
-            solidityType.AddMember constructor
-            solidityType
+            //let invokeCodeTest (args: Expr list) :Expr =
+            //    match args with
+            //    | [] -> failwith "not args"
+            //    | this::tail -> 
+            //        let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+            //        <@@ 
+            //            printfn "%A" (%%fargs: obj[])
+            //            ()
+            //        @@>
 
-        let getTypes nameSufix (json: JObject) =
+            let method = ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
+
+            let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ typeof<TransactionReceipt> ])
+            let methodAsync = ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+            //let methodTest = ProvidedMethod(name + "Test", parametrList, typeof<unit>, invokeCode = invokeCodeTest, isStatic = false)
+            [method; methodAsync]//; methodTest]
+
+
+        let makeType name baseType = 
+            let result = ProvidedTypeDefinition(name, Some <| baseType, isErased = false)
+            let ctrDefault = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+            result.AddMember ctrDefault
+            result
+
+        let createNestedTypes (contractType:ProvidedTypeDefinition) nameSufix (json: JObject) =
             
             match string json.["type"] with
             | "function" -> 
-                let dto = Json.deserialize<FunctionJsonDTO> (string json) 
-                let functionType = makeSolidityType (sprintf "%s%sFunction" dto.name nameSufix) typeof<FunctionMessage> dto.inputs
-                let functionOutputType = makeSolidityType (sprintf "%s%sOutputDTO" dto.name nameSufix) typeof<FunctionOutputDTO> dto.outputs
+                let dto = Json.deserialize<FunctionJsonDTO> (string json)
                 
+                let functionType = makeType (sprintf "%s%sFunction" dto.name nameSufix) typeof<FunctionMessage>
+
+                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
+                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
+
+                functionType.AddMembers fields
+                functionType.AddMembers propertes
+
+
+                let functionOutputType = makeType (sprintf "%s%sOutputDTO" dto.name nameSufix) typeof<FunctionOutputDTO> 
+
+                let outputFields = dto.outputs |> Seq.mapi makeField |> Seq.toList
+                let outputPropertes = Seq.mapi2 makeProperty outputFields dto.outputs |> Seq.toList
+                
+                functionOutputType.AddMembers outputFields
+                functionOutputType.AddMembers outputPropertes
+
                 functionOutputType.AddCustomAttribute (getAttribute typeof<FunctionOutputAttribute>)
 
                 match dto.outputs with
@@ -125,55 +203,81 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                     functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; param._type|])
                 | _ -> 
                     functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; functionOutputType|])
-                
 
-                [functionOutputType; functionType]
+                let methods = makeFunctionMethods (sprintf "%s%s" dto.name nameSufix) dto.inputs
+                contractType.AddMembers methods
+
+                contractType.AddMembers [functionOutputType; functionType]
             | "event" -> 
                 let dto = Json.deserialize<EventJsonDTO> (string json) 
-                let eventType =  makeSolidityType (sprintf "%sEventDTO" dto.name) typeof<obj> dto.inputs //EventDTO
+                let eventType =  makeType (sprintf "%sEventDTO" dto.name) typeof<EventDTO>
+
+                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
+                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
                 
+                eventType.AddMembers fields
+                eventType.AddMembers propertes
+
                 eventType.AddCustomAttribute (getAttributeWithParams typeof<EventAttribute> [|dto.name|])
 
-                [eventType]
+                contractType.AddMember eventType
             | "constructor" ->
                 let dto = Json.deserialize<ConstructorJsonDTO> (string json) 
-                let constructorType =  makeSolidityType (sprintf "%sDeployment" contractName) typeof<obj> dto.inputs
+                let constructorType =  makeType (sprintf "%sDeployment" contractName) typeof<obj>
 
-                [constructorType]
-            | _ -> []
+                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
+                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
 
-        
-        let solidityTypes = 
-            abi 
-            |> Seq.groupBy(fun json -> 
-                 let _type = string json.["type"]
-                 let _name = 
+                constructorType.AddMembers fields
+                constructorType.AddMembers propertes
+
+                contractType.AddMember constructorType
+            | _ -> ()
+
+        let contractType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>, isErased = false, hideObjectMethods = true)
+
+        abis.Children<JObject>() 
+        |> Seq.groupBy(fun json -> 
+                let _type = string json.["type"]
+                let _name = 
                     match json.TryGetValue "name" with
                     | true, v -> string v
                     | _ -> "Noname"
-                 _type + _name
-            )
-            |> Seq.collect(fun (_,group) ->
-                match group |> Seq.toList with
-                | [] -> []
-                | [json] -> getTypes "" json
-                | headJson::tailJson -> 
-                    let headTypes = getTypes "" headJson
-                    let tailTypes = tailJson |> List.mapi(fun i json -> getTypes (sprintf "%i" (i + 1)) json) |> List.collect id
-                    List.append headTypes tailTypes
-                 )
-            |> Seq.toList
+                _type + _name
+        )
+        |> Seq.iter(fun (_,group) ->
+            match group |> Seq.toList with
+            | [] -> ()
+            | [json] -> createNestedTypes contractType "" json
+            | headJson::tailJson -> 
+                createNestedTypes contractType  "" headJson
+                tailJson |> List.iteri(fun i json -> createNestedTypes contractType  (sprintf "%i" (i + 1)) json)
+                )
 
-        let asm = ProvidedAssembly()
-        asm.AddTypes(solidityTypes)
+        contractType.AddMember etherConn
+        contractType.AddMember contractPlug
 
-        let providedType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>, isErased=false)
+        let abiString = abis.ToString()
+        let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("web3",typeof<Web3>)]
+        let ctr = ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+            <@@ 
+                %%Expr.FieldSetUnchecked(args.[0], etherConn, 
+                    <@@ EthereumConnection(%%args.[2]:Web3) @@>
+                )
+                %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
+                    <@@ ContractPlug(%%Expr.FieldGet(args.[0], etherConn), abiString, (%%args.[1]:string)) @@>
+                )
+                () :> obj 
+            @@>) //
 
-        providedType.AddMember <| ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
-        providedType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
-        providedType.AddMembers(solidityTypes)
-        asm.AddTypes([providedType])
-        providedType
+
+        contractType.AddMember ctr
+
+        contractType.AddMember <| ProvidedProperty(propertyName = "EthereumConnection", propertyType = typeof<EthereumConnection>, getterCode = fun args -> Expr.FieldGet(args.[0], etherConn))
+        contractType.AddMember <| ProvidedProperty(propertyName = "ContractPlug", propertyType = typeof<ContractPlug>, getterCode = fun args -> Expr.FieldGet(args.[0], contractPlug))
+        contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
+        contractType
+
 
     let contractsFolderPath = paramValues.[0] :?> string
     let resolutionFolder = paramValues.[1] :?> string
@@ -201,21 +305,19 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             let parsedJson = JObject.Parse(json)
             //printfn "parsedJson: %A" parsedJson
             let abis = parsedJson.["abi"]
-            let abiJson = abis.Children<JObject>() //|> string
-            //printfn "abiJson: %A" abiJson
             let contractName = parsedJson.["contractName"].ToString()
             printfn "contractName: %A" contractName
 
-            (fileName, contractName, abiJson))
+            (fileName, contractName, abis))
         |> Seq.map createType
         |> Seq.toList
         |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
 
     let asm = ProvidedAssembly()
-    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
+    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = false)
     rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fullPath @@>)
     rootType.AddMembers contractTypes
-    asm.AddTypes([rootType])
+    asm.AddTypes [rootType]
     rootType
 
 [<TypeProvider>]
@@ -233,7 +335,7 @@ type SolidityProvider (config:TypeProviderConfig) as this =
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
     do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased=false)
+    let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased = false)
 
     do t.DefineStaticParameters(staticParams, constructRootType ns config)
     

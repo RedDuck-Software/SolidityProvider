@@ -13,7 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Json" Version="0.4.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.7.1" />
+    <PackageReference Include="Nethereum.ABI" Version="3.8.0" />
+    <PackageReference Include="Nethereum.Contracts" Version="3.8.0" />
     <PackageReference Include="xunit" Version="2.4.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -26,9 +29,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="SolidityProvider.Runtime">
-      <HintPath>..\..\..\..\..\..\Share\SolidityProvider.Runtime.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\..\src\SolidityProvider.Runtime\SolidityProvider.Runtime.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="5.0.2" />
   </ItemGroup>
 
 </Project>

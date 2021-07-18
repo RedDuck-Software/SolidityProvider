@@ -3,7 +3,7 @@ id SolidityProvider
 title
     Type provider for convenient integration of Solidity ABI files and Nethereum
 authors
-    Mark Virchenko, Ilyas Rahimov, Michael Prokazin, Schalk Dormehl
+    Mark Virchenko, Ilyas Rahimov, Michael Prokazin
 projectUrl
     https://github.com/RedDuck-Software/SolidityProvider
 iconUrl
@@ -18,6 +18,7 @@ summary
     This library is for the .NET platform implementing SolidityProvider.
 description
     This library is for the .NET platform implementing SolidityProvider.
+licenseExpression GPL-3.0-or-later
 files
     #bin/Release/net45/SolidityProvider.Runtime.* ==> lib/net45
     bin/Release/netstandard2.0/SolidityProvider.Runtime.* ==> lib/netstandard2.0
@@ -31,6 +32,7 @@ dependencies
   FSharp.Json >= 0.4.0
   Nethereum.ABI >= 3.8.0
   Nethereum.Contracts >= 3.8.0
+  Nethereum.Web3 >= 3.8.0
 
 # put any package references here
 #  Some.Package
@@ -40,4 +42,5 @@ dependencies
 #    System.Text.Encoding.CodePages >= LOCKEDVERSION
 
 releaseNotes
-    Type provider for use with Nethereum
+    Fix payable field
+
