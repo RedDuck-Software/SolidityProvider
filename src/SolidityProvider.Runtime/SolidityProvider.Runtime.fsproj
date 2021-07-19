@@ -18,9 +18,8 @@
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
-    <Compile Include="EthereumConnection.fs" />
-    <Compile Include="ContractPlug.fs" />
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ContractPlug.fs" />
     <Compile Include="SolidityProvider.Runtime.fs" />
     <None Include="paket.references" />
   </ItemGroup>

@@ -32,7 +32,7 @@ type Address = string
 
 type Parameter = {
     indexed: bool option
-    internalType:string;
+    internalType:string option;
     name:string;
     [<JsonField("type")>]
     _type:string;
@@ -88,7 +88,6 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
 let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
     let createType (fileName: string, contractName, abis:JToken) =
         
-        let etherConn = ProvidedField("_etherConn", typeof<EthereumConnection>)
         let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
 
         let getPropertyName index (param:Parameter) = 
@@ -254,26 +253,26 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 tailJson |> List.iteri(fun i json -> createNestedTypes contractType  (sprintf "%i" (i + 1)) json)
                 )
 
-        contractType.AddMember etherConn
         contractType.AddMember contractPlug
 
         let abiString = abis.ToString()
-        let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("web3",typeof<Web3>)]
-        let ctr = ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
-            <@@ 
-                %%Expr.FieldSetUnchecked(args.[0], etherConn, 
-                    <@@ EthereumConnection(%%args.[2]:Web3) @@>
-                )
-                %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                    <@@ ContractPlug(%%Expr.FieldGet(args.[0], etherConn), abiString, (%%args.[1]:string)) @@>
-                )
-                () :> obj 
-            @@>) //
+        let ctr1 = 
+            let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("getWeb3",typeof<unit->Web3>)]
+            ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                <@@ 
+                    %%Expr.FieldSetUnchecked(args.[0], contractPlug, <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string)) @@>)
+                    () :> obj 
+                @@>) //
 
+        let ctr2 = 
+            let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("web3",typeof<Web3>)]
+            ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                <@@ 
+                    %%Expr.FieldSetUnchecked(args.[0], contractPlug, <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string)) @@>)
+                    () :> obj 
+                @@>) //
+        contractType.AddMembers [ctr1; ctr2]
 
-        contractType.AddMember ctr
-
-        contractType.AddMember <| ProvidedProperty(propertyName = "EthereumConnection", propertyType = typeof<EthereumConnection>, getterCode = fun args -> Expr.FieldGet(args.[0], etherConn))
         contractType.AddMember <| ProvidedProperty(propertyName = "ContractPlug", propertyType = typeof<ContractPlug>, getterCode = fun args -> Expr.FieldGet(args.[0], contractPlug))
         contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
         contractType

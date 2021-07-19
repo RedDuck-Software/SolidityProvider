@@ -20,7 +20,6 @@
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="..\SolidityProvider.Runtime\EthereumConnection.fs" Link="EthereumConnection.fs" />
     <Compile Include="..\SolidityProvider.Runtime\ContractPlug.fs" Link="ContractPlug.fs" />
     <Compile Include="..\SolidityProvider.Runtime\SolidityProvider.Runtime.fs" />
     <Compile Include="SolidityProvider.DesignTime.fs" />

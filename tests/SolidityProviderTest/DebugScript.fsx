@@ -36,7 +36,7 @@ let abi = Abi(@"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts\dEth.json")
 
 let web3 = Web3(Account(hardhatPrivKey), hardhatURI)
 
-let dEth = A.dETHContract("0", web3)
+let dEth = A.dETHContract("0", fun () -> web3)
 
 dEth.allowanceTest("1", "2")
 

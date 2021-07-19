@@ -1,6 +1,9 @@
 ﻿namespace SolidityProviderNamespace
 
 open System.Numerics
+open Nethereum.Web3
+open Nethereum.Hex.HexTypes
+open Nethereum.RPC.Eth.DTOs
 
 [<AutoOpenAttribute>]
 module task =
@@ -11,13 +14,28 @@ module task =
         |> Async.RunSynchronously
 
 
-type ContractPlug(ethConn: EthereumConnection, abi: string, address: string) =
-    member val public EthConn = ethConn
-    
-    member val public Address = address
+type ContractPlug(getWeb3: unit->Web3, abi: string, address: string) =
+    let bigInt (value: uint64) = BigInteger(value)
+    let hexBigInt (value: uint64) = HexBigInteger(bigInt value)
 
-    member val public Contract = 
-        ethConn.Web3.Eth.GetContract(abi, address)
+    new(web3: Web3, abi: string, address: string) = ContractPlug((fun ()-> web3), abi, address)
+
+    member val Gas = hexBigInt 9500000UL with get, set
+    member val GasPrice = hexBigInt 8000000000UL with get, set
+    member this.Account with get() = getWeb3().TransactionManager.Account
+    member this.Contract with get() = getWeb3().Eth.GetContract(abi, address)
+    member this.Web3 with get() = getWeb3()
+
+    member this.SendTxAsync (value:BigInteger) data = 
+        let input: TransactionInput =
+            TransactionInput(
+                data, 
+                address, 
+                this.Account.Address, 
+                this.Gas,
+                this.GasPrice, 
+                HexBigInteger(value))
+        this.Web3.Eth.TransactionManager.SendTransactionAndWaitForReceiptAsync(input, null)
 
     member this.Function functionName = 
         this.Contract.GetFunction(functionName)
@@ -37,17 +55,12 @@ type ContractPlug(ethConn: EthereumConnection, abi: string, address: string) =
     member this.FunctionData functionName arguments = 
         (this.Function functionName).GetData(arguments)
 
-    member this.ExecuteFunctionFromAsyncWithValue value functionName arguments (connection:EthereumConnection) = 
-        this.FunctionData functionName arguments |> connection.SendTxAsync this.Address value 
-
-    member this.ExecuteFunctionFromAsync functionName arguments connection = 
-        this.ExecuteFunctionFromAsyncWithValue (BigInteger(0)) functionName arguments connection
-
-    member this.ExecuteFunctionFrom functionName arguments connection = 
-        this.ExecuteFunctionFromAsync functionName arguments connection |> runNow
+    member this.ExecuteFunctionAsyncWithValue value functionName arguments = 
+        this.FunctionData functionName arguments |> this.SendTxAsync value 
 
     member this.ExecuteFunctionAsync functionName arguments = 
-        this.ExecuteFunctionFromAsync functionName arguments this.EthConn
+        this.ExecuteFunctionAsyncWithValue (BigInteger(0)) functionName arguments
 
     member this.ExecuteFunction functionName arguments = 
         this.ExecuteFunctionAsync functionName arguments |> runNow
+
