@@ -4,24 +4,43 @@ open System.Numerics
 open Nethereum.Web3
 open Nethereum.Hex.HexTypes
 open Nethereum.RPC.Eth.DTOs
+open System.Threading.Tasks
 
 [<AutoOpenAttribute>]
-module task =
-
+module misc =
     let inline runNow task =
         task
         |> Async.AwaitTask
         |> Async.RunSynchronously
 
+    let inline bigInt (value: uint64) = BigInteger(value)
+    let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
 
-type ContractPlug(getWeb3: unit->Web3, abi: string, address: string) =
-    let bigInt (value: uint64) = BigInteger(value)
-    let hexBigInt (value: uint64) = HexBigInteger(bigInt value)
+type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gas: uint64, gasPrice: uint64) =
 
-    new(web3: Web3, abi: string, address: string) = ContractPlug((fun ()-> web3), abi, address)
+    new(web3: Web3, abi: string, address: string, gas: uint64, gasPrice: uint64) = 
+        ContractPlug((fun ()-> web3), abi, address, gas, gasPrice)
 
-    member val Gas = hexBigInt 9500000UL with get, set
-    member val GasPrice = hexBigInt 8000000000UL with get, set
+    new(getWeb3:unit->Web3, abi: string, bytecode:string, constructorArguments: obj array, gas: uint64, gasPrice: uint64) = 
+        let transaction = 
+            getWeb3().Eth.DeployContract.SendRequestAndWaitForReceiptAsync(
+                abi,
+                bytecode,
+                getWeb3().TransactionManager.Account.Address,
+                hexBigInt(gas),
+                hexBigInt(gasPrice),
+                hexBigInt 0UL,
+                null,
+                constructorArguments) |> runNow
+        
+        ContractPlug(getWeb3, abi, transaction.ContractAddress, gas, gasPrice)
+
+    new(web3: Web3, abi: string, bytecode:string, constructorArguments: obj array, gas: uint64, gasPrice: uint64) = 
+        ContractPlug((fun ()-> web3), abi, bytecode, constructorArguments, gas, gasPrice)
+
+    member val Gas = hexBigInt(gas) with get
+    member val GasPrice = hexBigInt(gasPrice) with get
+
     member this.Account with get() = getWeb3().TransactionManager.Account
     member this.Contract with get() = getWeb3().Eth.GetContract(abi, address)
     member this.Web3 with get() = getWeb3()
@@ -55,8 +74,12 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string) =
     member this.FunctionData functionName arguments = 
         (this.Function functionName).GetData(arguments)
 
+    member this.ExecuteFunctionAsyncWithValueFrom value functionName arguments = 
+        let data = this.FunctionData functionName arguments 
+        this.SendTxAsync value data 
+
     member this.ExecuteFunctionAsyncWithValue value functionName arguments = 
-        this.FunctionData functionName arguments |> this.SendTxAsync value 
+        this.ExecuteFunctionAsyncWithValueFrom value functionName arguments
 
     member this.ExecuteFunctionAsync functionName arguments = 
         this.ExecuteFunctionAsyncWithValue (BigInteger(0)) functionName arguments

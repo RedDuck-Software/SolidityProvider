@@ -86,9 +86,14 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
         member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
 
 let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
-    let createType (fileName: string, contractName, abis:JToken) =
+    let createType (fileName: string, contractName, abis:JToken, byteCode: string option) =
         
         let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
+        let gasArgs = [
+            ProvidedParameter("gas", typeof<uint64>, optionalValue = 9500000UL)
+            ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = 8000000000UL)
+        ]
+
 
         let getPropertyName index (param:Parameter) = 
             if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
@@ -127,42 +132,115 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 |> Seq.toList
 
             let invokeCode (args: Expr list) :Expr =
-                match args with
-                | [] -> failwith "not args"
-                | this::tail -> 
-                    let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                    let ctr = Expr.FieldGet(this, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[])
-                    @@>
+                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let ctr = Expr.FieldGet(args.Head, contractPlug)
+                <@@ 
+                    (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[])
+                @@>
 
             let invokeCodeAsync (args: Expr list) :Expr =
-                match args with
-                | [] -> failwith "not args"
-                | this::tail -> 
-                    let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                    let ctr = Expr.FieldGet(this, contractPlug)
-                    <@@ 
-                         (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[])
-                    @@>
+                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let ctr = Expr.FieldGet(args.Head, contractPlug)
+                <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[])
+                @@>
 
-            //let invokeCodeTest (args: Expr list) :Expr =
-            //    match args with
-            //    | [] -> failwith "not args"
-            //    | this::tail -> 
-            //        let fargs = Expr.NewArrayUnchecked(typeof<obj>, tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-            //        <@@ 
-            //            printfn "%A" (%%fargs: obj[])
-            //            ()
-            //        @@>
 
             let method = ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
 
             let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ typeof<TransactionReceipt> ])
             let methodAsync = ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-            //let methodTest = ProvidedMethod(name + "Test", parametrList, typeof<unit>, invokeCode = invokeCodeTest, isStatic = false)
-            [method; methodAsync]//; methodTest]
+            [method; methodAsync]
 
+        let makeDefaultConstructor () =
+            let abiString = abis.ToString()
+
+            let ctr1 = 
+                let ctrParams = 
+                    seq {
+                        yield ProvidedParameter("contractAddress",typeof<string>)
+                        yield ProvidedParameter("getWeb3",typeof<unit->Web3>)
+                        yield! gasArgs
+                    } |> Seq.toList
+                ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                    <@@ 
+                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
+                            <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string), (%%args.[3]:uint64), (%%args.[4]:uint64)) @@>)
+                        () :> obj 
+                    @@>) 
+
+            let ctr2 = 
+                let ctrParams = 
+                    seq {
+                        yield ProvidedParameter("contractAddress",typeof<string>)
+                        yield ProvidedParameter("web3",typeof<Web3>)
+                        yield! gasArgs
+                    } |> Seq.toList
+                ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                    <@@ 
+                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
+                            <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string), (%%args.[3]:uint64), (%%args.[4]:uint64)) @@>)
+                        () :> obj 
+                    @@>) 
+
+            [ctr1; ctr2]
+
+        let makeDeployConstructor (byteCode: string) (inputs: Parameter seq) =
+            let abiString = abis.ToString()
+
+            let deployArgs = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param._type
+                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
+            let deployArgsLength = deployArgs.Length
+
+            let ctr1 = 
+                let ctrParams = 
+                    seq {
+                        yield ProvidedParameter("getWeb3",typeof<unit->Web3>)
+                        yield! deployArgs
+                        yield! gasArgs
+                        }
+                        |> Seq.toList
+
+                ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                    let fargs = 
+                        if deployArgsLength > 0 then
+                            Expr.NewArrayUnchecked(typeof<obj>, args.[2..2 + (deployArgs.Length) - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                        else
+                            Expr.NewArrayUnchecked(typeof<obj>, [])
+                    <@@ 
+                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
+                            <@@ ContractPlug((%%args.[1]:unit->Web3), abiString, byteCode, (%%fargs: obj array), (%%args.[2 + deployArgsLength]:uint64), (%%args.[3 + deployArgsLength]:uint64)) @@>)
+                        () :> obj 
+                    @@>) 
+
+            let ctr2 = 
+                let ctrParams = 
+                    seq {
+                        yield ProvidedParameter("web3",typeof<Web3>); 
+                        yield! deployArgs
+                        yield! gasArgs
+                        }
+                        |> Seq.toList
+
+                ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
+                    let fargs = 
+                        if deployArgsLength > 0 then
+                            Expr.NewArrayUnchecked(typeof<obj>, args.[2..2 + (deployArgs.Length) - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                        else
+                            Expr.NewArrayUnchecked(typeof<obj>, [])
+                    <@@ 
+                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
+                            <@@ ContractPlug((%%args.[1]: Web3), abiString, byteCode, (%%fargs: obj array), (%%args.[2 + deployArgsLength]:uint64), (%%args.[3 + deployArgsLength]:uint64)) @@>)
+                        () :> obj 
+                    @@>) 
+
+            [ctr1; ctr2]
 
         let makeType name baseType = 
             let result = ProvidedTypeDefinition(name, Some <| baseType, isErased = false)
@@ -230,6 +308,12 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 constructorType.AddMembers fields
                 constructorType.AddMembers propertes
 
+                match byteCode with
+                | Some byteCode ->
+                    let construtors = makeDeployConstructor byteCode dto.inputs
+                    contractType.AddMembers construtors
+                | _ -> ()
+
                 contractType.AddMember constructorType
             | _ -> ()
 
@@ -253,27 +337,22 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 tailJson |> List.iteri(fun i json -> createNestedTypes contractType  (sprintf "%i" (i + 1)) json)
                 )
 
+        if contractType.GetConstructors().Length = 0 then
+            match byteCode with
+            | Some byteCode ->
+                let construtors = makeDeployConstructor byteCode []
+                contractType.AddMembers construtors
+            | _ -> ()
+
         contractType.AddMember contractPlug
 
-        let abiString = abis.ToString()
-        let ctr1 = 
-            let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("getWeb3",typeof<unit->Web3>)]
-            ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
-                <@@ 
-                    %%Expr.FieldSetUnchecked(args.[0], contractPlug, <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string)) @@>)
-                    () :> obj 
-                @@>) //
-
-        let ctr2 = 
-            let ctrParams = [ProvidedParameter("contractAddress",typeof<string>); ProvidedParameter("web3",typeof<Web3>)]
-            ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
-                <@@ 
-                    %%Expr.FieldSetUnchecked(args.[0], contractPlug, <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string)) @@>)
-                    () :> obj 
-                @@>) //
-        contractType.AddMembers [ctr1; ctr2]
+        let defaultConstructors = makeDefaultConstructor()
+        contractType.AddMembers defaultConstructors
 
         contractType.AddMember <| ProvidedProperty(propertyName = "ContractPlug", propertyType = typeof<ContractPlug>, getterCode = fun args -> Expr.FieldGet(args.[0], contractPlug))
+
+        let addressGetter = fun (args: Expr list) -> <@@ (%%Expr.FieldGet(args.[0], contractPlug): ContractPlug).Contract.Address @@>
+        contractType.AddMember <| ProvidedProperty(propertyName = "Address", propertyType = typeof<string>, getterCode = addressGetter)
         contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
         contractType
 
@@ -305,9 +384,15 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             //printfn "parsedJson: %A" parsedJson
             let abis = parsedJson.["abi"]
             let contractName = parsedJson.["contractName"].ToString()
+            let byteCode = 
+                match parsedJson.TryGetValue("bytecode") with
+                | true, token -> Some (token.ToString())
+                | _ -> 
+                    printfn "bytecode not found"
+                    None
             printfn "contractName: %A" contractName
 
-            (fileName, contractName, abis))
+            (fileName, contractName, abis, byteCode))
         |> Seq.map createType
         |> Seq.toList
         |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
