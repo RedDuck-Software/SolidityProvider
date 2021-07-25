@@ -23,6 +23,11 @@ open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System.Numerics
 
+let inline runNow task =
+    task
+    |> Async.AwaitTask
+    |> Async.RunSynchronously
+
 type Abi(filename) =
     member val JsonString = File.OpenText(filename).ReadToEnd()
     member this.AbiString = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("abi").ToString()
@@ -57,15 +62,17 @@ let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 //         [|makerOracleMainnet :> obj; daiUsdMainnet :> obj; ethUsdMainnet :> obj|]
 //     )
 
-let debug = A.DebugContract("321", (fun () -> web3))
-printfn "%A" debug.ContractPlug.Gas
-printfn "%A" debug.Address
+//let debug = A.DebugContract("321", (fun () -> web3))
 
-let oracleContractMainnet = A.OracleContract((fun () -> web3), makerOracleMainnet, daiUsdMainnet, ethUsdMainnet)
+//let oracleContractMainnet = A.OracleContract((fun () -> web3), makerOracleMainnet, daiUsdMainnet, ethUsdMainnet)
 
-// let dEth = A.dETHContract("0", fun () -> web3)
+let lottery = A.LotteryContract((fun () -> web3))
 
-// dEth.allowance("1", "2")
+let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
+printfn "%A" (qo)
+let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
+printfn "%A" (qo2)
+
 
 // let lottery = A.LotteryContract("0", web3)
 // lottery.players(BigInteger 123)

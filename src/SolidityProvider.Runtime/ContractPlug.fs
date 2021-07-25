@@ -5,6 +5,7 @@ open Nethereum.Web3
 open Nethereum.Hex.HexTypes
 open Nethereum.RPC.Eth.DTOs
 open System.Threading.Tasks
+open System
 
 [<AutoOpenAttribute>]
 module misc =
@@ -87,3 +88,59 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gas: uint64
     member this.ExecuteFunction functionName arguments = 
         this.ExecuteFunctionAsync functionName arguments |> runNow
 
+module QueryHelper =
+
+    type QueryHelper<'a> =
+        static member QueryAsync (plug:ContractPlug) functionName arguments =
+            plug.QueryAsync<'a> functionName arguments
+
+        static member Query (plug:ContractPlug) functionName arguments =
+            plug.QueryAsync<'a> functionName arguments |> runNow
+
+    type QueryObjHelper<'a when 'a: (new: unit -> 'a)> =
+        static member QueryObjAsync (plug:ContractPlug) functionName arguments =
+            plug.QueryObjAsync<'a> functionName arguments
+
+        static member QueryObj (plug:ContractPlug) functionName arguments =
+            plug.QueryObjAsync<'a> functionName arguments |> runNow
+
+
+    let queryAsync (plug:ContractPlug) (outType: Type) functionName arguments =
+        let queryHelper = typedefof<QueryHelper<_>>.MakeGenericType(outType)
+        let method = queryHelper.GetMethod("QueryAsync")
+        let args = [|
+            (plug:> obj)
+            (functionName:> obj)
+            (arguments:> obj)
+        |]
+        method.Invoke(null, args)
+
+    let query (plug:ContractPlug) (outType: 'a) functionName arguments =
+        let queryHelper = typedefof<QueryHelper<_>>.MakeGenericType(outType)
+        let method = queryHelper.GetMethod("Query")
+        let args = [|
+            (plug:> obj)
+            (functionName:> obj)
+            (arguments:> obj)
+        |]
+        method.Invoke(null, args)
+
+    let queryObjAsync (plug:ContractPlug) (outType: 'a) functionName arguments =
+        let queryHelper = typedefof<QueryObjHelper<_>>.MakeGenericType(outType)
+        let method = queryHelper.GetMethod("QueryObjAsync")
+        let args = [|
+            (plug:> obj)
+            (functionName:> obj)
+            (arguments:> obj)
+        |]
+        method.Invoke(null, args)
+
+    let queryObj (plug:ContractPlug) (outType: 'a) functionName arguments =
+        let queryHelper = typedefof<QueryObjHelper<_>>.MakeGenericType(outType)
+        let method = queryHelper.GetMethod("QueryObj")
+        let args = [|
+            (plug:> obj)
+            (functionName:> obj)
+            (arguments:> obj)
+        |]
+        method.Invoke(null, args)

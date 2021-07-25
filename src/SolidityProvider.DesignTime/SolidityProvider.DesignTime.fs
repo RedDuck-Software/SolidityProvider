@@ -152,6 +152,73 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
             let methodAsync = ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
             [method; methodAsync]
 
+        let makeFunctionQuery name (inputs: Parameter seq) (output: Type) (outIsObject:bool) =
+            let parametrList = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param._type
+                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
+
+            let invokeCode (args: Expr list) :Expr =
+                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let ctr = Expr.FieldGet(args.Head, contractPlug)
+                let result = 
+                    if outIsObject then
+                        <@@ 
+                            QueryHelper.queryObj (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                        @@>
+                    else
+                        <@@ 
+                            QueryHelper.query (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                        @@>
+
+                Expr.Coerce(result, output)
+
+            let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ output ])
+            let invokeCodeAsync (args: Expr list) :Expr =
+                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let ctr = Expr.FieldGet(args.Head, contractPlug)
+                let result = 
+                    if outIsObject then
+                        <@@ 
+                            QueryHelper.queryObjAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                        @@>
+                    else
+                        <@@ 
+                            QueryHelper.queryAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                        @@>
+
+                Expr.Coerce(result, asyncOutput)
+
+
+            let method = ProvidedMethod(name + "Query", parametrList, output, invokeCode = invokeCode, isStatic = false)
+
+            let methodAsync = ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+            [method; methodAsync]
+
+        let makeFunctionData name (inputs: Parameter seq) =
+            let parametrList = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param._type
+                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
+
+            let invokeCode (args: Expr list) :Expr =
+                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let ctr = Expr.FieldGet(args.Head, contractPlug)
+                <@@ 
+                    (%%ctr:ContractPlug).FunctionData name (%%fargs: obj[])
+                @@>
+
+            ProvidedMethod(name + "Data", parametrList, typeof<string>, invokeCode = invokeCode, isStatic = false)
+
+
         let makeDefaultConstructor () =
             let abiString = abis.ToString()
 
@@ -277,12 +344,21 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 | [||] -> 
                     functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name|])
                 | [|param|] -> 
+                    let querys = makeFunctionQuery (sprintf "%s%s" dto.name nameSufix) dto.inputs (solidityTypeToNetType param._type) false
+                    contractType.AddMembers querys
+
                     functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; param._type|])
                 | _ -> 
+                    let querys = makeFunctionQuery (sprintf "%s%s" dto.name nameSufix) dto.inputs functionOutputType true
+                    contractType.AddMembers querys
+
                     functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; functionOutputType|])
 
                 let methods = makeFunctionMethods (sprintf "%s%s" dto.name nameSufix) dto.inputs
                 contractType.AddMembers methods
+
+                let functionData = makeFunctionData (sprintf "%s%s" dto.name nameSufix) dto.inputs
+                contractType.AddMember functionData
 
                 contractType.AddMembers [functionOutputType; functionType]
             | "event" -> 
