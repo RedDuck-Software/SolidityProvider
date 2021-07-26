@@ -4,7 +4,6 @@ open System.Numerics
 open Nethereum.Web3
 open Nethereum.Hex.HexTypes
 open Nethereum.RPC.Eth.DTOs
-open System.Threading.Tasks
 open System
 
 [<AutoOpenAttribute>]
@@ -17,44 +16,64 @@ module misc =
     let inline bigInt (value: uint64) = BigInteger(value)
     let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
 
-type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gas: uint64, gasPrice: uint64) =
+type GasLimit(v: HexBigInteger) = 
+    member this.Value = v
+    new (v:BigInteger) = GasLimit(HexBigInteger v)
+    new (v:uint64) = GasLimit(bigint v)
+    with override this.ToString() = v.ToString()
+type GasPrice(v: HexBigInteger) = 
+    member this.Value = v
+    new (v:BigInteger) = GasPrice(HexBigInteger v)
+    new (v:uint64) = GasPrice(bigint v)
+    with override this.ToString() = v.ToString()
+type WeiValue(v: HexBigInteger) = 
+    member this.Value = v
+    new (v:BigInteger) = WeiValue(HexBigInteger v)
+    new (v:uint64) = WeiValue(bigint v)
+    with override this.ToString() = v.ToString()
 
-    new(web3: Web3, abi: string, address: string, gas: uint64, gasPrice: uint64) = 
-        ContractPlug((fun ()-> web3), abi, address, gas, gasPrice)
+type gasLlimit = GasLimit
+type gasPrice = GasPrice
+type weiValue = WeiValue
 
-    new(getWeb3:unit->Web3, abi: string, bytecode:string, constructorArguments: obj array, gas: uint64, gasPrice: uint64) = 
+type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: GasLimit, gasPrice: GasPrice) =
+
+    new(web3: Web3, abi: string, address: string, gasLimit: GasLimit, gasPrice: GasPrice) = 
+        ContractPlug((fun ()-> web3), abi, address, gasLimit, gasPrice)
+
+    new(getWeb3:unit->Web3, abi: string, bytecode:string, constructorArguments: obj array, gasLimit: GasLimit, gasPrice: GasPrice) = 
         let transaction = 
             getWeb3().Eth.DeployContract.SendRequestAndWaitForReceiptAsync(
                 abi,
                 bytecode,
                 getWeb3().TransactionManager.Account.Address,
-                hexBigInt(gas),
-                hexBigInt(gasPrice),
+                gasLimit.Value,
+                gasPrice.Value,
                 hexBigInt 0UL,
                 null,
                 constructorArguments) |> runNow
         
-        ContractPlug(getWeb3, abi, transaction.ContractAddress, gas, gasPrice)
+        ContractPlug(getWeb3, abi, transaction.ContractAddress, gasLimit, gasPrice)
 
-    new(web3: Web3, abi: string, bytecode:string, constructorArguments: obj array, gas: uint64, gasPrice: uint64) = 
+    new(web3: Web3, abi: string, bytecode:string, constructorArguments: obj array, gas: GasLimit, gasPrice: GasPrice) = 
         ContractPlug((fun ()-> web3), abi, bytecode, constructorArguments, gas, gasPrice)
 
-    member val Gas = hexBigInt(gas) with get
-    member val GasPrice = hexBigInt(gasPrice) with get
+    member val GasLimit = gasLimit with get
+    member val GasPrice = gasPrice with get
 
     member this.Account with get() = getWeb3().TransactionManager.Account
     member this.Contract with get() = getWeb3().Eth.GetContract(abi, address)
     member this.Web3 with get() = getWeb3()
 
-    member this.SendTxAsync (value:BigInteger) data = 
+    member this.SendTxAsync data (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
         let input: TransactionInput =
             TransactionInput(
                 data, 
                 address, 
                 this.Account.Address, 
-                this.Gas,
-                this.GasPrice, 
-                HexBigInteger(value))
+                gasLimit.Value,
+                gasPrice.Value, 
+                weiValue.Value)
         this.Web3.Eth.TransactionManager.SendTransactionAndWaitForReceiptAsync(input, null)
 
     member this.Function functionName = 
@@ -75,18 +94,18 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gas: uint64
     member this.FunctionData functionName arguments = 
         (this.Function functionName).GetData(arguments)
 
-    member this.ExecuteFunctionAsyncWithValueFrom value functionName arguments = 
+    member this.ExecuteFunctionAsyncWithValueFrom functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
         let data = this.FunctionData functionName arguments 
-        this.SendTxAsync value data 
+        this.SendTxAsync data weiValue gasLimit gasPrice
 
-    member this.ExecuteFunctionAsyncWithValue value functionName arguments = 
-        this.ExecuteFunctionAsyncWithValueFrom value functionName arguments
+    member this.ExecuteFunctionAsyncWithValue functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
+        this.ExecuteFunctionAsyncWithValueFrom functionName arguments weiValue gasLimit gasPrice
 
-    member this.ExecuteFunctionAsync functionName arguments = 
-        this.ExecuteFunctionAsyncWithValue (BigInteger(0)) functionName arguments
+    member this.ExecuteFunctionAsync functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
+        this.ExecuteFunctionAsyncWithValue functionName arguments weiValue gasLimit gasPrice 
 
-    member this.ExecuteFunction functionName arguments = 
-        this.ExecuteFunctionAsync functionName arguments |> runNow
+    member this.ExecuteFunction functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
+        this.ExecuteFunctionAsync functionName arguments weiValue gasLimit gasPrice |> runNow
 
 module QueryHelper =
 

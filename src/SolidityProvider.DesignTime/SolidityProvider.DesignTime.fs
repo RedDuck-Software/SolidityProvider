@@ -18,7 +18,6 @@ open Nethereum.RPC.Eth.DTOs
 open Nethereum.Web3
 open System.Numerics
 
-
 [<TypeProviderAssembly>]
 do ()
 
@@ -90,10 +89,11 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
         
         let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
         let gasArgs = [
-            ProvidedParameter("gas", typeof<uint64>, optionalValue = 9500000UL)
-            ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = 8000000000UL)
+            ProvidedParameter("gas", typeof<uint64>, optionalValue = uint64 9500000UL)
+            ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = uint64 8000000000UL)
         ]
 
+        let weiValue = ProvidedParameter("weiValue", typeof<uint64>, optionalValue = 1UL)
 
         let getPropertyName index (param:Parameter) = 
             if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
@@ -130,27 +130,93 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                         ProvidedParameter(parametrName, netType)
                     ) 
                 |> Seq.toList
-
-            let invokeCode (args: Expr list) :Expr =
-                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                let ctr = Expr.FieldGet(args.Head, contractPlug)
-                <@@ 
-                    (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[])
-                @@>
-
-            let invokeCodeAsync (args: Expr list) :Expr =
-                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                let ctr = Expr.FieldGet(args.Head, contractPlug)
-                <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[])
-                @@>
-
-
-            let method = ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
-
+            
             let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ typeof<TransactionReceipt> ])
-            let methodAsync = ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-            [method; methodAsync]
+
+            let funArgLength = parametrList.Length
+
+            let getFargs (args: Expr list) = 
+                if funArgLength > 0 then
+                    Expr.NewArrayUnchecked(typeof<obj>, args.Tail.[0..funArgLength - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                else
+                    Expr.NewArrayUnchecked(typeof<obj>, [])
+
+
+            let method0 = 
+                let invokeCode (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (WeiValue 0UL) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
+                    @@>
+                let invokeCodeAsync (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (WeiValue 0UL) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
+                    @@>
+
+                [
+                    ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
+                    ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+                ]
+
+            let method1 = 
+                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>)
+                let allParametrs = parametrList @ [weiValue]
+                let invokeCode (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let weiValue = args.[funArgLength + 1]
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
+                    @@>
+                let invokeCodeAsync (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let weiValue = args.[funArgLength + 1]
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
+                    @@>
+
+                [
+                    ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
+                    ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+                ]
+
+            let method2 = 
+                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>)
+                let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>)
+                let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>)
+
+                let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
+                let invokeCode (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let weiValue = args.[funArgLength + 1]
+                    let gasLimit = args.[funArgLength + 2]
+                    let gasPrice = args.[funArgLength + 3]
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%gasLimit:GasLimit) (%%gasPrice:GasPrice)
+                    @@>
+                let invokeCodeAsync (args: Expr list) :Expr =
+                    let fargs = getFargs args
+                    let weiValue = args.[funArgLength + 1]
+                    let gasLimit = args.[funArgLength + 2]
+                    let gasPrice = args.[funArgLength + 3]
+                    let ctr = Expr.FieldGet(args.Head, contractPlug)
+                    <@@ 
+                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%gasLimit:GasLimit) (%%gasPrice:GasPrice)
+                    @@>
+
+                [
+                    ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
+                    ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+                ]
+
+
+            method0 @ method1 @ method2
+            
 
         let makeFunctionQuery name (inputs: Parameter seq) (output: Type) (outIsObject:bool) =
             let parametrList = 
@@ -232,7 +298,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
                     <@@ 
                         %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string), (%%args.[3]:uint64), (%%args.[4]:uint64)) @@>)
+                            <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string), GasLimit (%%args.[3]:uint64), GasPrice(%%args.[4]:uint64)) @@>)
                         () :> obj 
                     @@>) 
 
@@ -246,7 +312,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                 ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
                     <@@ 
                         %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string), (%%args.[3]:uint64), (%%args.[4]:uint64)) @@>)
+                            <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string), GasLimit (%%args.[3]:uint64), GasPrice(%%args.[4]:uint64)) @@>)
                         () :> obj 
                     @@>) 
 
@@ -282,7 +348,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                             Expr.NewArrayUnchecked(typeof<obj>, [])
                     <@@ 
                         %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[1]:unit->Web3), abiString, byteCode, (%%fargs: obj array), (%%args.[2 + deployArgsLength]:uint64), (%%args.[3 + deployArgsLength]:uint64)) @@>)
+                            <@@ ContractPlug((%%args.[1]:unit->Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[2 + deployArgsLength]:uint64), GasPrice (%%args.[3 + deployArgsLength]:uint64)) @@>)
                         () :> obj 
                     @@>) 
 
@@ -303,7 +369,7 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
                             Expr.NewArrayUnchecked(typeof<obj>, [])
                     <@@ 
                         %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[1]: Web3), abiString, byteCode, (%%fargs: obj array), (%%args.[2 + deployArgsLength]:uint64), (%%args.[3 + deployArgsLength]:uint64)) @@>)
+                            <@@ ContractPlug((%%args.[1]: Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[2 + deployArgsLength]:uint64), GasPrice(%%args.[3 + deployArgsLength]:uint64)) @@>)
                         () :> obj 
                     @@>) 
 

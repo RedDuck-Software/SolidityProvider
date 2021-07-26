@@ -1,7 +1,7 @@
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.ABI.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Contracts.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.RPC.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.HEX.dll"
+#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Hex.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.JsonRpc.Client.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Web3.dll"
 #r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Accounts.dll"
@@ -22,6 +22,8 @@ open System.IO
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System.Numerics
+open Nethereum.Hex
+open SolidityProviderNamespace
 
 let inline runNow task =
     task
@@ -66,12 +68,17 @@ let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 
 //let oracleContractMainnet = A.OracleContract((fun () -> web3), makerOracleMainnet, daiUsdMainnet, ethUsdMainnet)
 
+
 let lottery = A.LotteryContract((fun () -> web3))
 
-let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
-printfn "%A" (qo)
-let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
-printfn "%A" (qo2)
+
+
+// let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
+// printfn "%A" (qo)
+let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, lottery.ContractPlug.GasPrice)
+printfn "%A" (qo1)
+// let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
+// printfn "%A" (qo2)
 
 
 // let lottery = A.LotteryContract("0", web3)
