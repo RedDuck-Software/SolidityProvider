@@ -35,6 +35,7 @@ type Abi(filename) =
     member this.AbiString = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("abi").ToString()
     member this.Bytecode = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("bytecode").ToString()
 
+type B = SolidityProviderNS.SolidityTypesFromTruffle< @"../truffle-config.js" >
 type A = SolidityProviderNS.SolidityTypes< @"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts">
 
 let hardhatPrivKey = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -69,13 +70,15 @@ let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 //let oracleContractMainnet = A.OracleContract((fun () -> web3), makerOracleMainnet, daiUsdMainnet, ethUsdMainnet)
 
 
-let lottery = A.LotteryContract((fun () -> web3))
+let lottery = A.LotteryContract(fun () -> web3)
 
 
 
 // let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
 // printfn "%A" (qo)
 let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, lottery.ContractPlug.GasPrice)
+let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, gasPrice 900000UL)
+
 printfn "%A" (qo1)
 // let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
 // printfn "%A" (qo2)

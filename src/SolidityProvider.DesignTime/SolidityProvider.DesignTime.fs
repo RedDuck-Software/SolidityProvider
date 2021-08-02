@@ -17,6 +17,8 @@ open System.Threading.Tasks
 open Nethereum.RPC.Eth.DTOs
 open Nethereum.Web3
 open System.Numerics
+open System.Diagnostics
+open System.Text.RegularExpressions
 
 [<TypeProviderAssembly>]
 do ()
@@ -84,7 +86,7 @@ let getAttributeWithParams (attributeType:Type) (args: obj[]) =
         member __.ConstructorArguments = args |> Array.map (fun i -> CustomAttributeTypedArgument(i.GetType(), i)) :> Collections.Generic.IList<_>
         member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
 
-let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) = 
+let constructRootType (ns:string) (typeName:string) (buildPath: string) = 
     let createType (fileName: string, contractName, abis:JToken, byteCode: string option) =
         
         let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
@@ -499,27 +501,10 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
         contractType
 
 
-    let contractsFolderPath = paramValues.[0] :?> string
-    let resolutionFolder = paramValues.[1] :?> string
 
-    let fullPath = 
-        match Uri.TryCreate(contractsFolderPath, UriKind.RelativeOrAbsolute) with
-        | true, uri -> 
-            if uri.IsAbsoluteUri then
-                contractsFolderPath
-            else
-                let root = 
-                    if String.IsNullOrWhiteSpace resolutionFolder then 
-                        cfg.ResolutionFolder
-                    else resolutionFolder
-                Path.Combine(root, contractsFolderPath)
-        | _ -> 
-            if String.IsNullOrWhiteSpace resolutionFolder then 
-                cfg.ResolutionFolder 
-            else resolutionFolder
 
     let contractTypes = 
-        Directory.EnumerateFiles(fullPath, "*.json") 
+        Directory.EnumerateFiles(buildPath, "*.json") 
         |> Seq.map(fun fileName -> 
             let json = File.ReadAllText fileName
             let parsedJson = JObject.Parse(json)
@@ -541,10 +526,64 @@ let constructRootType (ns:string) (cfg:TypeProviderConfig) (typeName:string) (pa
 
     let asm = ProvidedAssembly()
     let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = false)
-    rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fullPath @@>)
+    rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ buildPath @@>)
     rootType.AddMembers contractTypes
     asm.AddTypes [rootType]
     rootType
+
+
+let resolvePath inPath resolutionFolder (cfg:TypeProviderConfig) = 
+    match Uri.TryCreate(inPath, UriKind.RelativeOrAbsolute) with
+    | true, uri -> 
+        if uri.IsAbsoluteUri then
+            inPath
+        else
+            let root = 
+                if String.IsNullOrWhiteSpace resolutionFolder then 
+                    cfg.ResolutionFolder
+                else resolutionFolder
+            Path.Combine(root, inPath) |> Path.GetFullPath
+    | _ -> 
+        if String.IsNullOrWhiteSpace resolutionFolder then 
+            cfg.ResolutionFolder 
+        else resolutionFolder
+
+let constructRootTypeByFolder (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
+    let contractsFolderPath = paramValues.[0] :?> string
+    let resolutionFolder = paramValues.[1] :?> string
+
+    let buildPath = resolvePath contractsFolderPath resolutionFolder cfg
+    constructRootType ns typeName buildPath
+
+let constructRootTypeByTruffle (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
+    let truffleConfigFile = paramValues.[0] :?> string
+    let resolutionFolder = paramValues.[1] :?> string
+    
+    printfn "file: %s dir: %s cfg: %s" truffleConfigFile resolutionFolder cfg.ResolutionFolder
+
+    
+    let buildPath = 
+        let configFile = resolvePath truffleConfigFile resolutionFolder cfg
+        let configFolder = Path.GetDirectoryName configFile
+        
+        let buildFolder = Path.Combine(configFolder, "build/contracts")
+        Directory.GetFiles(buildFolder, "*.json") |> Seq.iter File.Delete
+
+        let procInfo = ProcessStartInfo("npx")
+        procInfo.Arguments <- "truffle build"
+        procInfo.RedirectStandardOutput <- true
+        procInfo.WorkingDirectory <- configFolder
+        let proc = Process.Start(procInfo)
+        proc.WaitForExit()
+        let output = proc.StandardOutput.ReadToEnd()
+        if proc.ExitCode <> 0 then failwith (sprintf "configFile: %s configDir: %s Error compiling: %s" configFile configFolder output)
+        
+        let m = Regex.Match(output, @"Artifacts written to (.+)\n")
+        if not m.Success then failwith (sprintf "configFile: %s configDir: %s Error compiling output: %s" configFile configFolder output)
+            
+        m.Groups.[1].Value
+
+    constructRootType ns typeName buildPath
 
 [<TypeProvider>]
 type SolidityProvider (config:TypeProviderConfig) as this =
@@ -557,12 +596,20 @@ type SolidityProvider (config:TypeProviderConfig) as this =
         ProvidedStaticParameter("ContractsFolderPath", typeof<string>)
         ProvidedStaticParameter("ResolutionFolder", typeof<string>, parameterDefaultValue = "")
     ]
+    let staticParams4Trufle = [
+        ProvidedStaticParameter("TrufleConfigFile", typeof<string>)
+        ProvidedStaticParameter("ResolutionFolder", typeof<string>, parameterDefaultValue = "")
+    ]
 
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
     do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let t = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased = false)
+    let typesByFolder = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased = false)
 
-    do t.DefineStaticParameters(staticParams, constructRootType ns config)
+    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByFolder ns config)
     
-    do this.AddNamespace(ns, [t])
+    let typesByTruffle = ProvidedTypeDefinition(asm, ns, "SolidityTypesFromTruffle", Some typeof<obj>, isErased = false)
+    
+    do typesByTruffle.DefineStaticParameters(staticParams, constructRootTypeByTruffle ns config)
+    
+    do this.AddNamespace(ns, [typesByFolder; typesByTruffle])
