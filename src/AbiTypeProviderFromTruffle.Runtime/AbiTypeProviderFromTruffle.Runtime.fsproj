@@ -18,9 +18,9 @@
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
+    <Compile Include="..\AbiTypeProvider.DesignTime\ContractPlug.fs" Link="ContractPlug.fs" />
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="ContractPlug.fs" />
-    <Compile Include="SolidityProvider.Runtime.fs" />
+    <Compile Include="AbiTypeProviderFromTruffle.Runtime.fs" />
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
@@ -28,16 +28,16 @@
     <PackageReference Include="FSharp.Core" Version="4.3.4" />
   </ItemGroup>
   <Target Name="BeforeBuild">
-    <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Restore" />
-    <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
-    <MSBuild Projects="..\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
+    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Restore" />
+    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
+    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
   </Target>
   <Target Name="AfterBuild">
-    <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
+    <CreateItem Include="..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
     </CreateItem>
     <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp3.1" />
-    <CreateItem Include="..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\SolidityProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
+    <CreateItem Include="..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
     </CreateItem>
     <Copy SourceFiles="@(DesignTimeBinaries3)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netstandard2.0" />

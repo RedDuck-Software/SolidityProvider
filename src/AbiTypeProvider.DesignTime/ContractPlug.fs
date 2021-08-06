@@ -1,4 +1,4 @@
-﻿namespace SolidityProviderNamespace
+﻿namespace AbiTypeProvider
 
 open System.Numerics
 open Nethereum.Web3

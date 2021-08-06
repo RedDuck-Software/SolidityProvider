@@ -1,4 +1,4 @@
-module SolidityProviderImplementation
+module AbiTypeProviderImplementation
 
 open System.Reflection
 open System.IO
@@ -9,7 +9,7 @@ open Nethereum.ABI.FunctionEncoding.Attributes
 open Newtonsoft.Json.Linq
 open ProviderImplementation.ProvidedTypes
 open ProviderImplementation.ProvidedTypes.UncheckedQuotations
-open SolidityProviderNamespace
+open AbiTypeProvider
 open Nethereum.Contracts
 open Microsoft.FSharp.Quotations
 open System.Collections.Generic
@@ -573,8 +573,13 @@ let constructRootTypeByTruffle (ns:string) (cfg:TypeProviderConfig) (typeName:st
         procInfo.Arguments <- "truffle build"
         procInfo.RedirectStandardOutput <- true
         procInfo.WorkingDirectory <- configFolder
+        //procInfo.Environment |> Seq.iter(fun kv -> printfn "%s: %s" kv.Key kv.Value)
+        //printfn "6"
         let proc = Process.Start(procInfo)
+        //printfn "7"
         proc.WaitForExit()
+        //printfn "8"
+
         let output = proc.StandardOutput.ReadToEnd()
         if proc.ExitCode <> 0 then failwith (sprintf "configFile: %s configDir: %s Error compiling: %s" configFile configFolder output)
         
@@ -586,30 +591,45 @@ let constructRootTypeByTruffle (ns:string) (cfg:TypeProviderConfig) (typeName:st
     constructRootType ns typeName buildPath
 
 [<TypeProvider>]
-type SolidityProvider (config:TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("SolidityProvider.DesignTime", "SolidityProvider.Runtime")])
+type AbiTypeProvider (config:TypeProviderConfig) as this =
+    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("AbiTypeProvider.DesignTime", "AbiTypeProvider.Runtime")])
 
-    let ns = "SolidityProviderNS"
+    let ns = "AbiTypeProvider"
     let asm = Assembly.GetExecutingAssembly()
 
     let staticParams = [
         ProvidedStaticParameter("ContractsFolderPath", typeof<string>)
         ProvidedStaticParameter("ResolutionFolder", typeof<string>, parameterDefaultValue = "")
     ]
-    let staticParams4Trufle = [
+
+    // check we contain a copy of runtime files, and are not referencing the runtime DLL
+    do assert (typeof<ContractPlug>.Assembly.GetName().Name = asm.GetName().Name)
+
+    let typesByFolder = ProvidedTypeDefinition(asm, ns, "AbiTypes", Some typeof<obj>, isErased = false)
+
+    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByFolder ns config)
+    
+    do this.AddNamespace(ns, [typesByFolder])
+
+
+[<TypeProvider>]
+type AbiTypeProviderFromTruffle (config:TypeProviderConfig) as this =
+    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("AbiTypeProvider.DesignTime", "AbiTypeProviderFromTruffle.Runtime")])
+
+
+    let ns = "AbiTypeProvider"
+    let asm = Assembly.GetExecutingAssembly()
+
+    let staticParams = [
         ProvidedStaticParameter("TrufleConfigFile", typeof<string>)
         ProvidedStaticParameter("ResolutionFolder", typeof<string>, parameterDefaultValue = "")
     ]
 
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
-    do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)
+    do assert (typeof<ContractPlug>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let typesByFolder = ProvidedTypeDefinition(asm, ns, "SolidityTypes", Some typeof<obj>, isErased = false)
+    let typesByFolder = ProvidedTypeDefinition(asm, ns, "AbiTypesFromTruffle", Some typeof<obj>, isErased = false)
 
-    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByFolder ns config)
+    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByTruffle ns config)
     
-    let typesByTruffle = ProvidedTypeDefinition(asm, ns, "SolidityTypesFromTruffle", Some typeof<obj>, isErased = false)
-    
-    do typesByTruffle.DefineStaticParameters(staticParams, constructRootTypeByTruffle ns config)
-    
-    do this.AddNamespace(ns, [typesByFolder; typesByTruffle])
+    do this.AddNamespace(ns, [typesByFolder])

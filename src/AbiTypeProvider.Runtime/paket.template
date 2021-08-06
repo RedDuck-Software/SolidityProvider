@@ -1,0 +1,37 @@
+type file
+id AbiTypeProvider
+title
+    Type provider for convenient integration of Solidity ABI files and Nethereum
+authors
+    Mark Virchenko, Schalk Dormehl, Ilyas Rahimov, Michael Prokazin
+projectUrl
+    https://github.com/RedDuck-Software/SolidityProvider
+iconUrl
+    https://raw.githubusercontent.com/RedDuck-Software/SolidityProvider/master/misc/logo82x128.png
+licenseUrl
+    https://licenses.nuget.org/GPL-3.0-or-later
+requireLicenseAcceptance
+    false
+tags
+    F# FSharp typeprovider Solidity Ethereum SolidityProvider AbiTypeProvider Nethereum
+summary
+    This library is for the .NET platform implementing AbiTypeProvider.
+description
+    This library is for the .NET platform implementing AbiTypeProvider.
+licenseExpression GPL-3.0-or-later
+files
+    bin/Release/netstandard2.0/AbiTypeProvider.Runtime.* ==> lib/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
+references
+    AbiTypeProvider.Runtime.dll
+dependencies
+  FSharp.Core >= LOCKEDVERSION
+  FSharp.Json >= 0.4.0
+  Nethereum.ABI >= 3.8.0
+  Nethereum.Contracts >= 3.8.0
+  Nethereum.Web3 >= 3.8.0
+
+releaseNotes
+    Fix payable field
+
