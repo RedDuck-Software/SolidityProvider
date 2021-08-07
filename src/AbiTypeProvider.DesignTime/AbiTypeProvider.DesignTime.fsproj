@@ -23,23 +23,9 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="AbiTypeProvider.DesignTime.fs" />
     <None Include="paket.references" />
-    <None Include="..\..\packages\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net45'">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Nethereum.ABI" Version="3.8.0" />
-    <PackageReference Include="Nethereum.Contracts" Version="3.8.0" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="FSharp.Json">
-      <Version>0.4.0</Version>
-    </PackageReference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
-    <PackageReference Include="FSharp.Json">
-      <Version>0.4.0</Version>
-    </PackageReference>
+    <ProjectReference Include="..\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

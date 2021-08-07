@@ -10,6 +10,7 @@
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Newtonsoft.JSON.dll"
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Common.Logging.Core.dll"
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\BouncyCastle.Crypto.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\AbiTypeProvider.Common.dll"
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProvider.Runtime.dll"
 #r @"..\..\src\AbiTypeProviderFromTruffle.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProviderFromTruffle.Runtime.dll"
 
@@ -24,7 +25,6 @@ open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System.Numerics
 open Nethereum.Hex
-
 
 
 let inline runNow task =

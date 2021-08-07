@@ -9,4 +9,4 @@ Building:
     dotnet paket update
     dotnet build -c release
 
-    dotnet paket pack nuget --version 0.0.1
+    dotnet paket pack nuget --interproject-references fix --version 0.0.2

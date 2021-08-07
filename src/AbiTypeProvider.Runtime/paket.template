@@ -1,4 +1,4 @@
-type file
+type project
 id AbiTypeProvider
 title
     Type provider for convenient integration of Solidity ABI files and Nethereum
@@ -25,13 +25,8 @@ files
     bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
 references
     AbiTypeProvider.Runtime.dll
+
 dependencies
-  FSharp.Core >= LOCKEDVERSION
-  FSharp.Json >= 0.4.0
-  Nethereum.ABI >= 3.8.0
-  Nethereum.Contracts >= 3.8.0
-  Nethereum.Web3 >= 3.8.0
-
-releaseNotes
-    Fix payable field
-
+    FSharp.Core >= LOCKEDVERSION
+    Nethereum.Hex >= LOCKEDVERSION
+    Nethereum.Web3 >= LOCKEDVERSION

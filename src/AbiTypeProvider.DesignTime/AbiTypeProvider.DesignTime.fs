@@ -19,6 +19,7 @@ open Nethereum.Web3
 open System.Numerics
 open System.Diagnostics
 open System.Text.RegularExpressions
+open AbiTypeProvider.Common
 
 [<TypeProviderAssembly>]
 do ()

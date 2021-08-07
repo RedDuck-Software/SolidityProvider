@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30717.126
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -18,6 +18,8 @@ EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "SolidityProviderTest", "tests\SolidityProviderTest\SolidityProviderTest.fsproj", "{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProviderFromTruffle.Runtime", "src\AbiTypeProviderFromTruffle.Runtime\AbiTypeProviderFromTruffle.Runtime.fsproj", "{DFE81B8F-7253-4187-8146-428FEE3AA69D}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProvider.Common", "src\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj", "{2A570C21-6E90-447E-A4E0-36B34859E6FD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -45,6 +47,10 @@ Global
 		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

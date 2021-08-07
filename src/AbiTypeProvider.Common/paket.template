@@ -1,5 +1,5 @@
 type project
-id AbiTypeProviderFromTruffle
+id AbiTypeProvider.Common
 title
     Type provider for convenient integration of Solidity ABI files and Nethereum
 authors
@@ -19,15 +19,10 @@ summary
 description
     This library is for the .NET platform implementing AbiTypeProvider.
 licenseExpression GPL-3.0-or-later
-files
-    bin/Release/netstandard2.0/AbiTypeProviderFromTruffle.Runtime.* ==> lib/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
-references
-    AbiTypeProviderFromTruffle.Runtime.dll
-    
-dependencies
-    FSharp.Core >= LOCKEDVERSION
-    Nethereum.Hex >= LOCKEDVERSION
-    Nethereum.Web3 >= LOCKEDVERSION
 
+dependencies
+  FSharp.Core >= LOCKEDVERSION
+  Nethereum.Hex >= LOCKEDVERSION
+
+include-referenced-projects 
+    true
