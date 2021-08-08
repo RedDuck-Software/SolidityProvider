@@ -1,0 +1,13 @@
+File:ProvidedTypes.fsi
+File:ProvidedTypes.fs
+
+FSharp.Core
+Nethereum.Web3
+Nethereum.Hex
+Nethereum.ABI
+Nethereum.Contracts
+FSharp.Json
+
+# put any package references here
+# Some.Package
+# System.Text.Encoding.CodePages framework: netstandard2.0,netcoreapp3.1

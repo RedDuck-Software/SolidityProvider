@@ -27,16 +27,16 @@
     <ProjectReference Include="..\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj" />
   </ItemGroup>
   <Target Name="BeforeBuild">
-    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Restore" />
-    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
-    <MSBuild Projects="..\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Restore" />
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
   </Target>
   <Target Name="AfterBuild">
-    <CreateItem Include="..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
+    <CreateItem Include="..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
     </CreateItem>
     <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp3.1" />
-    <CreateItem Include="..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\AbiTypeProvider.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
+    <CreateItem Include="..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
     </CreateItem>
     <Copy SourceFiles="@(DesignTimeBinaries3)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netstandard2.0" />

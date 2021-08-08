@@ -1,7 +1,7 @@
 type project
 id AbiTypeProvider
 title
-    Type provider for convenient integration of Solidity ABI files and Nethereum
+    AbiTypeProvider
 authors
     Mark Virchenko, Schalk Dormehl, Ilyas Rahimov, Michael Prokazin
 projectUrl
@@ -15,9 +15,9 @@ requireLicenseAcceptance
 tags
     F# FSharp typeprovider Solidity Ethereum SolidityProvider AbiTypeProvider Nethereum
 summary
-    This library is for the .NET platform implementing AbiTypeProvider.
+    AbiTypeProvider generates Nethereum types from abi files and interacts with smart contracts in Ethereum.
 description
-    This library is for the .NET platform implementing AbiTypeProvider.
+    AbiTypeProvider generates Nethereum types from abi files and interacts with smart contracts in Ethereum.
 licenseExpression GPL-3.0-or-later
 files
     bin/Release/netstandard2.0/AbiTypeProvider.Runtime.* ==> lib/netstandard2.0
