@@ -12,7 +12,7 @@
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\BouncyCastle.Crypto.dll"
 #r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\AbiTypeProvider.Common.dll"
 //#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProvider.Runtime.dll"
-#r @"..\..\src\AbiTypeProviderFromTruffle.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProviderFromTruffle.Runtime.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProvider.Runtime.dll"
 
 open Nethereum.ABI.FunctionEncoding.Attributes
 open Nethereum.RPC
@@ -36,24 +36,32 @@ type Abi(filename) =
     member this.AbiString = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("abi").ToString()
     member this.Bytecode = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("bytecode").ToString()
 
-//type A = AbiTypeProvider.AbiTypes< @"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts">
-type B = AbiTypeProvider.AbiTypesFromTruffle< @"../truffle-config.js" >
+type A = AbiTypeProvider.AbiTypes< @"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts">
+
+//type B = AbiTypeProvider.AbiTypesFromTruffle< @"../truffle-config.js" >
 
 let hardhatPrivKey = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 let hardhatURI = "http://192.168.122.1:8545"
 
-let abi = Abi(@"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts\Oracle.json")
+// let abi = Abi(@"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts\Oracle.json")
 
-abi.Bytecode
+// abi.Bytecode
+open AbiTypeProvider.Common
 
 let web3 = Web3(Account(hardhatPrivKey), hardhatURI)
+let dEth = A.dEthContract("", web3)
+let r = dEth.authority(weiValue 1UL)
+printfn "%A" r
 
-let inline bigInt (value: uint64) = BigInteger(value)
-let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
+printfn "%A" r.Status
 
-let makerOracleMainnet = "0x729D19f657BD0614b4985Cf1D82531c67569197B"
-let daiUsdMainnet = "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9"
-let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+
+// let inline bigInt (value: uint64) = BigInteger(value)
+// let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
+
+// let makerOracleMainnet = "0x729D19f657BD0614b4985Cf1D82531c67569197B"
+// let daiUsdMainnet = "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9"
+// let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 
 // let r = 
 //     web3.Eth.DeployContract.SendRequestAndWaitForReceiptAsync(

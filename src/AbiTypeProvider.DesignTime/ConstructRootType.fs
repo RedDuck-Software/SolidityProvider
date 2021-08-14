@@ -118,6 +118,15 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
 
             property
 
+        
+        let ExecuteFunctionMethod0 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod0")
+        let ExecuteFunctionMethod0Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod0Async")
+
+        let ExecuteFunctionMethod1 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod1")
+        let ExecuteFunctionMethod1Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod1Async")
+
+        let ExecuteFunctionMethod2 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod2")
+        let ExecuteFunctionMethod2Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod2Async")
 
         let makeFunctionMethods name (inputs: Parameter seq) =
             let parametrList = 
@@ -133,26 +142,12 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
 
             let funArgLength = parametrList.Length
 
-            let getFargs (args: Expr list) = 
-                if funArgLength > 0 then
-                    Expr.NewArrayUnchecked(typeof<obj>, args.Tail.[0..funArgLength - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                else
-                    Expr.NewArrayUnchecked(typeof<obj>, [])
-
+            let getAllArgs (args: Expr list) = 
+                    Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
 
             let method0 = 
-                let invokeCode (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (WeiValue 0UL) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
-                    @@>
-                let invokeCodeAsync (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (WeiValue 0UL) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
-                    @@>
+                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod0, [getAllArgs args])
+                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod0Async, [getAllArgs args])
 
                 [
                     ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
@@ -162,20 +157,8 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
             let method1 = 
                 let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>)
                 let allParametrs = parametrList @ [weiValue]
-                let invokeCode (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let weiValue = args.[funArgLength + 1]
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
-                    @@>
-                let invokeCodeAsync (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let weiValue = args.[funArgLength + 1]
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%ctr:ContractPlug).GasLimit (%%ctr:ContractPlug).GasPrice
-                    @@>
+                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod1, [getAllArgs args])
+                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod1Async, [getAllArgs args])
 
                 [
                     ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
@@ -183,38 +166,26 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                 ]
 
             let method2 = 
-                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>)
-                let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>)
-                let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>)
+                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
+                let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
+                let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
 
                 let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
-                let invokeCode (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let weiValue = args.[funArgLength + 1]
-                    let gasLimit = args.[funArgLength + 2]
-                    let gasPrice = args.[funArgLength + 3]
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunction name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%gasLimit:GasLimit) (%%gasPrice:GasPrice)
-                    @@>
-                let invokeCodeAsync (args: Expr list) :Expr =
-                    let fargs = getFargs args
-                    let weiValue = args.[funArgLength + 1]
-                    let gasLimit = args.[funArgLength + 2]
-                    let gasPrice = args.[funArgLength + 3]
-                    let ctr = Expr.FieldGet(args.Head, contractPlug)
-                    <@@ 
-                        (%%ctr:ContractPlug).ExecuteFunctionAsync name (%%fargs: obj[]) (%%weiValue:WeiValue) (%%gasLimit:GasLimit) (%%gasPrice:GasPrice)
-                    @@>
+                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod2, [getAllArgs args])
+                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod2Async, [getAllArgs args])
 
                 [
                     ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
                     ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
                 ]
 
-
-            method0 @ method1 @ method2
+            //method0 @ method1 @ method2
+            method2
             
+        let QueryHelperQueryObj = typeof<QueryHelper>.GetMethod("queryObj")
+        let QueryHelperQuery = typeof<QueryHelper>.GetMethod("query")
+        //let QueryHelperQueryObjAsync = typeof<QueryHelper>.GetMethod("queryObjAsync")
+        //let QueryHelperQueryAsync = typeof<QueryHelper>.GetMethod("queryAsync")
 
         let makeFunctionQuery name (inputs: Parameter seq) (output: Type) (outIsObject:bool) =
             let parametrList = 
@@ -226,35 +197,40 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                     ) 
                 |> Seq.toList
 
-            let invokeCode (args: Expr list) :Expr =
-                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                let ctr = Expr.FieldGet(args.Head, contractPlug)
+            let funArgLength = parametrList.Length
+
+            let invokeCode (args: Expr list) :Expr = 
+                let allArgs = 
+                    Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value output :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+
                 let result = 
                     if outIsObject then
-                        <@@ 
-                            QueryHelper.queryObj (%%ctr:ContractPlug) output name (%%fargs: obj[])
-                        @@>
+                        Expr.Call(QueryHelperQueryObj, [allArgs])
                     else
-                        <@@ 
-                            QueryHelper.query (%%ctr:ContractPlug) output name (%%fargs: obj[])
-                        @@>
-
+                        Expr.Call(QueryHelperQuery, [allArgs])
                 Expr.Coerce(result, output)
 
             let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ output ])
             let invokeCodeAsync (args: Expr list) :Expr =
                 let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
                 let ctr = Expr.FieldGet(args.Head, contractPlug)
+
+
                 let result = 
                     if outIsObject then
                         <@@ 
-                            QueryHelper.queryObjAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                            QueryHelperOld.queryObjAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
                         @@>
                     else
                         <@@ 
-                            QueryHelper.queryAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
+                            QueryHelperOld.queryAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
                         @@>
 
+
+                    //if outIsObject then
+                    //    Expr.Call(QueryHelperQueryObjAsync, [allArgs])
+                    //else
+                    //    Expr.Call(QueryHelperQueryAsync, [allArgs])
                 Expr.Coerce(result, asyncOutput)
 
 
@@ -262,6 +238,8 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
 
             let methodAsync = ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
             [method; methodAsync]
+
+        let FunctionDataHelper = typeof<FunctionDataHelper>.GetMethod("FunctionData")
 
         let makeFunctionData name (inputs: Parameter seq) =
             let parametrList = 
@@ -274,14 +252,12 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                 |> Seq.toList
 
             let invokeCode (args: Expr list) :Expr =
-                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                let ctr = Expr.FieldGet(args.Head, contractPlug)
-                <@@ 
-                    (%%ctr:ContractPlug).FunctionData name (%%fargs: obj[])
-                @@>
+                let funArgLength = parametrList.Length
+
+                let allArgs = Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                Expr.Call(FunctionDataHelper, [allArgs])
 
             ProvidedMethod(name + "Data", parametrList, typeof<string>, invokeCode = invokeCode, isStatic = false)
-
 
         let makeDefaultConstructor () =
             let abiString = abis.ToString()
@@ -375,7 +351,7 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
 
         let makeType name baseType = 
             let result = ProvidedTypeDefinition(name, Some <| baseType, isErased = false)
-            let ctrDefault = ProvidedConstructor(parameters = [], invokeCode = fun _ -> <@@ () @@>)
+            let ctrDefault = ProvidedConstructor(parameters = [], invokeCode = fun _ -> Expr.Value(()))
             result.AddMember ctrDefault
             result
 
@@ -494,6 +470,12 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
         let addressGetter = fun (args: Expr list) -> <@@ (%%Expr.FieldGet(args.[0], contractPlug): ContractPlug).Contract.Address @@>
         contractType.AddMember <| ProvidedProperty(propertyName = "Address", propertyType = typeof<string>, getterCode = addressGetter)
         contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
+
+        contractType.GetMembers() 
+        |> Seq.groupBy(fun m -> m.MemberType)
+        |> Seq.iter(fun (mt, ms) -> 
+            printfn "%A: %d" mt (ms |> Seq.length)
+        )
         contractType
 
 
