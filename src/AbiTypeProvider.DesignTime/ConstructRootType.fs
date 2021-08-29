@@ -18,122 +18,54 @@ open Nethereum.RPC.Eth.DTOs
 open Nethereum.Web3
 open System.Numerics
 open AbiTypeProvider.Common
+open Nethereum.ABI.Model
 
 
-type DataObject() =
-    let data = Dictionary<string,obj>()
-    member x.RuntimeOperation() = data.Count
-
-
-type Address = string
-
-type Parameter = {
-    indexed: bool option
-    internalType:string option;
-    name:string;
-    [<JsonField("type")>]
-    _type:string;
-}
-
-type ConstructorJsonDTO = {
-    inputs: Parameter array;
-    payable: bool option;
-    stateMutability: string;
-}
-
-type EventJsonDTO = {
-    inputs: Parameter array;
-    name: string;
-    anonymous: bool option;
-}
-
-type FunctionJsonDTO = {
-    constant: bool option;
-    inputs: Parameter array;
-    name: string;
-    outputs: Parameter array;
-    payable: bool option;
-    stateMutability: string;
-}
-
-
-let solidityTypeToNetType solType = 
-    match solType with
-    | "uint256" | "unit160" | "uint128" | "uint80" | "int256" | "int160" | "int128" | "int80" -> typeof<BigInteger>
-    | "uint8" -> typeof<uint8>
-    | "uint16" -> typeof<uint16>
-    | "uint32" -> typeof<uint32>
-    | "uint64" -> typeof<uint64>
-    | "address" -> typeof<string>
-    | "bool" -> typeof<bool>
-    | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
-    | _ -> typeof<string>
-
-
-let getAttribute (attributeType:Type)  = 
-    { new Reflection.CustomAttributeData() with
-        member __.Constructor = attributeType.GetConstructor([||])
-        member __.ConstructorArguments = [||] :> IList<_>
-        member __.NamedArguments = [||] :> IList<_> }
-
-let getAttributeWithParams (attributeType:Type) (args: obj[]) = 
-    { new Reflection.CustomAttributeData() with
-        member __.Constructor = args |> Array.map (fun i -> i.GetType()) |> attributeType.GetConstructor
-        member __.ConstructorArguments = args |> Array.map (fun i -> CustomAttributeTypedArgument(i.GetType(), i)) :> Collections.Generic.IList<_>
-        member __.NamedArguments = [||] :> Collections.Generic.IList<_> }
-
-let constructRootType (ns:string) (typeName:string) (buildPath: string) = 
+let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: string) = 
     let createType (fileName: string, contractName, abis:JToken, byteCode: string option) =
         
-        let contractPlug = ProvidedField("_contractPlugin", typeof<ContractPlug>)
         let gasArgs = [
             ProvidedParameter("gas", typeof<uint64>, optionalValue = uint64 9500000UL)
             ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = uint64 8000000000UL)
         ]
 
-        let weiValue = ProvidedParameter("weiValue", typeof<uint64>, optionalValue = 1UL)
+        let getPropertyName index (param:Nethereum.ABI.Model.Parameter) = 
+            if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
 
-        let getPropertyName index (param:Parameter) = 
-            if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
-
-        let makeField index (param:Parameter) =
-            let netType = solidityTypeToNetType param._type
-            let fieldName = "_" + (getPropertyName index param)
-            ProvidedField(fieldName, netType)
-
-        let makeProperty index (field: ProvidedField) (param:Parameter) =
+        let ContainerTypeFieldsGetValue = typeof<ContainerTypeFields>.GetMethod("getValue")
+        let ContainerTypeFieldsGetValueBigInteger = typeof<ContainerTypeFields>.GetMethod("getValueBigInteger")
+        let ContainerTypeFieldsSetValue = typeof<ContainerTypeFields>.GetMethod("setValue")
+        let makeProperty index (param: Nethereum.ABI.Model.Parameter) =
+            let getDefaultValue(t:Type) =
+                if t.IsValueType then
+                    Activator.CreateInstance(t)
+                else
+                    null
             let propertyName = getPropertyName index param
-            let netType = solidityTypeToNetType param._type
-            let getter = fun [this] -> Expr.FieldGet(this, field)
-            let setter = fun [this; v] -> Expr.FieldSet(this, field, v)
+            let netType = solidityTypeToNetType param.Type
+            
+            let key = Guid.NewGuid().ToString()
+            
+            let getter = 
+                if netType = typeof<BigInteger> then
+                    fun (args: Expr list) -> Expr.Call(ContainerTypeFieldsGetValueBigInteger, [ Expr.Coerce(args.[0], typeof<obj>); Expr.Value key ])
+                else
+                    let defaulValue = getDefaultValue netType
+                    fun (args: Expr list) -> Expr.Call(ContainerTypeFieldsGetValue, [ Expr.Coerce(args.[0], typeof<obj>); Expr.Value defaulValue; Expr.Value key ])
+            let setter (args: Expr list) :Expr = Expr.Call(ContainerTypeFieldsSetValue, [ Expr.Coerce(args.[0], typeof<obj>); Expr.Value key; Expr.Coerce(args.[1], typeof<obj>) ])
+
             let property = ProvidedProperty(propertyName, netType, isStatic = false, getterCode = getter, setterCode = setter)
+            
+            key, property
 
-            let attrs: obj [] = 
-                match param.indexed with
-                | Some indexed -> [|param._type;param.name;index+1;indexed|]
-                | None -> [|param._type;param.name;index+1|]
-
-            getAttributeWithParams typeof<ParameterAttribute> attrs
-            |> property.AddCustomAttribute
-
-            property
-
-        
-        let ExecuteFunctionMethod0 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod0")
-        let ExecuteFunctionMethod0Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod0Async")
-
-        let ExecuteFunctionMethod1 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod1")
-        let ExecuteFunctionMethod1Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod1Async")
-
-        let ExecuteFunctionMethod2 = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod2")
-        let ExecuteFunctionMethod2Async = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod2Async")
-
-        let makeFunctionMethods name (inputs: Parameter seq) =
+        let ExecuteFunctionMethod = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod")
+        let ExecuteFunctionMethodAsync = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethodAsync")
+        let makeFunctionMethods name (inputs: Nethereum.ABI.Model.Parameter seq) =
             let parametrList = 
                 inputs 
                 |> Seq.mapi(fun index param -> 
-                        let netType = solidityTypeToNetType param._type
-                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
                         ProvidedParameter(parametrName, netType)
                     ) 
                 |> Seq.toList
@@ -145,108 +77,127 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
             let getAllArgs (args: Expr list) = 
                     Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
 
-            let method0 = 
-                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod0, [getAllArgs args])
-                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod0Async, [getAllArgs args])
+            let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
+            let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
+            let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
 
-                [
-                    ProvidedMethod(name, parametrList, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
-                    ProvidedMethod(name + "Async", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-                ]
+            let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
+            let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod, [getAllArgs args])
+            let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethodAsync, [getAllArgs args])
 
-            let method1 = 
-                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>)
-                let allParametrs = parametrList @ [weiValue]
-                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod1, [getAllArgs args])
-                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod1Async, [getAllArgs args])
+            [
+                ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
+                ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+            ]
 
-                [
-                    ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
-                    ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-                ]
 
-            let method2 = 
-                let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
-                let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
-                let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
-
-                let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
-                let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod2, [getAllArgs args])
-                let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethod2Async, [getAllArgs args])
-
-                [
-                    ProvidedMethod(name, allParametrs, typeof<TransactionReceipt>, invokeCode = invokeCode, isStatic = false)
-                    ProvidedMethod(name + "Async", allParametrs, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-                ]
-
-            //method0 @ method1 @ method2
-            method2
-            
-        let QueryHelperQueryObj = typeof<QueryHelper>.GetMethod("queryObj")
-        let QueryHelperQuery = typeof<QueryHelper>.GetMethod("query")
-        //let QueryHelperQueryObjAsync = typeof<QueryHelper>.GetMethod("queryObjAsync")
-        //let QueryHelperQueryAsync = typeof<QueryHelper>.GetMethod("queryAsync")
-
-        let makeFunctionQuery name (inputs: Parameter seq) (output: Type) (outIsObject:bool) =
+        let FunctionTransactionInput = typeof<MethodHelper>.GetMethod("FunctionTransactionInput")
+        let makeFunctionTransactionInput name (inputs: Nethereum.ABI.Model.Parameter seq) =
             let parametrList = 
                 inputs 
                 |> Seq.mapi(fun index param -> 
-                        let netType = solidityTypeToNetType param._type
-                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
+    
+            let funArgLength = parametrList.Length
+
+            let getAllArgs (args: Expr list) = 
+                    Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+
+            let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
+            let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
+            let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
+
+            let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
+            let invokeCode (args: Expr list) :Expr = Expr.Call(FunctionTransactionInput, [getAllArgs args])
+
+            ProvidedMethod(name + "TransactionInput", allParametrs, typeof<TransactionInput>, invokeCode = invokeCode, isStatic = false)
+
+            
+        let makeFunctionQuery name (inputs: Nethereum.ABI.Model.Parameter seq) (output: Type) (json: string) =
+            let parametrList = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
                         ProvidedParameter(parametrName, netType)
                     ) 
                 |> Seq.toList
 
-            let funArgLength = parametrList.Length
-
+            let queryHelperGeneric = ProvidedTypeBuilder.MakeGenericType(typedefof<QueryHelperGeneric<_>>, [output])
+            let QueryHelperQuery = queryHelperGeneric.GetMethod("Query")
+            let QueryHelperQueryAsync = queryHelperGeneric.GetMethod("QueryAsync")
+            
             let invokeCode (args: Expr list) :Expr = 
-                let allArgs = 
-                    Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value output :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-
-                let result = 
-                    if outIsObject then
-                        Expr.Call(QueryHelperQueryObj, [allArgs])
-                    else
-                        Expr.Call(QueryHelperQuery, [allArgs])
+                let fargs = Expr.NewArray(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let result = Expr.Call(QueryHelperQuery, [args.Head; Expr.Value name; Expr.Value json; fargs])
                 Expr.Coerce(result, output)
 
             let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ output ])
             let invokeCodeAsync (args: Expr list) :Expr =
-                let fargs = Expr.NewArrayUnchecked(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
-                let ctr = Expr.FieldGet(args.Head, contractPlug)
-
-
-                let result = 
-                    if outIsObject then
-                        <@@ 
-                            QueryHelperOld.queryObjAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
-                        @@>
-                    else
-                        <@@ 
-                            QueryHelperOld.queryAsync (%%ctr:ContractPlug) output name (%%fargs: obj[])
-                        @@>
-
-
-                    //if outIsObject then
-                    //    Expr.Call(QueryHelperQueryObjAsync, [allArgs])
-                    //else
-                    //    Expr.Call(QueryHelperQueryAsync, [allArgs])
+                let fargs = Expr.NewArray(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let result = Expr.Call(QueryHelperQueryAsync, [args.Head; Expr.Value name; Expr.Value json; fargs])
                 Expr.Coerce(result, asyncOutput)
 
+            [
+                ProvidedMethod(name + "Query", parametrList, output, invokeCode = invokeCode, isStatic = false)
+                ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+            ]
 
-            let method = ProvidedMethod(name + "Query", parametrList, output, invokeCode = invokeCode, isStatic = false)
 
-            let methodAsync = ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
-            [method; methodAsync]
-
-        let FunctionDataHelper = typeof<FunctionDataHelper>.GetMethod("FunctionData")
-
-        let makeFunctionData name (inputs: Parameter seq) =
+        let makeFunctionQueryObj name (inputs: Nethereum.ABI.Model.Parameter seq) (output: Type) (keyList: string []) (json: string) =
             let parametrList = 
                 inputs 
                 |> Seq.mapi(fun index param -> 
-                        let netType = solidityTypeToNetType param._type
-                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
+                        ProvidedParameter(parametrName, netType)
+                    ) 
+                |> Seq.toList
+
+            let queryHelperGeneric = ProvidedTypeBuilder.MakeGenericType(typedefof<QueryObjHelperGeneric<_>>, [output])
+            let QueryHelperQuery = queryHelperGeneric.GetMethod("Query")
+            let QueryHelperQueryAsync = queryHelperGeneric.GetMethod("QueryAsync")
+            
+            let invokeCode (args: Expr list) :Expr = 
+                let fargs = Expr.NewArray(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let result = Expr.Call(QueryHelperQuery, [args.Head; Expr.Value name; Expr.Value json; Expr.Value keyList; fargs])
+                Expr.Coerce(result, output)
+
+            let asyncOutput = ProvidedTypeBuilder.MakeGenericType(typedefof<Task<_>>, [ output ])
+            let invokeCodeAsync (args: Expr list) :Expr =
+                let fargs = Expr.NewArray(typeof<obj>, args.Tail |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                let result = Expr.Call(QueryHelperQueryAsync, [args.Head; Expr.Value name; Expr.Value json; Expr.Value keyList; fargs])
+                Expr.Coerce(result, asyncOutput)
+
+
+            [
+                ProvidedMethod(name + "Query", parametrList, output, invokeCode = invokeCode, isStatic = false)
+                ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
+            ]
+
+        let makeDecodeEvent (output: Type) (keyList: string []) (json: string) =
+            let parametrList = [ProvidedParameter("transactionReceipt", typeof<TransactionReceipt>)]
+
+            let eventHelperGeneric = ProvidedTypeBuilder.MakeGenericType(typedefof<EventHelperGeneric<_>>, [output])
+            let DecodeAllEvents = eventHelperGeneric.GetMethod("DecodeAllEvents")
+            
+            let outArrayType = output.MakeArrayType()
+            let invokeCode (args: Expr list) :Expr = 
+                Expr.Call(DecodeAllEvents, [Expr.Value json; Expr.Value keyList] @ args)
+
+            ProvidedMethod("DecodeAllEvents", parametrList, outArrayType, invokeCode = invokeCode, isStatic = true)
+
+        let FunctionDataHelper = typeof<FunctionDataHelper>.GetMethod("FunctionData")
+        let makeFunctionData name (inputs: Nethereum.ABI.Model.Parameter seq) =
+            let parametrList = 
+                inputs 
+                |> Seq.mapi(fun index param -> 
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
                         ProvidedParameter(parametrName, netType)
                     ) 
                 |> Seq.toList
@@ -271,9 +222,7 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                     } |> Seq.toList
                 ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
                     <@@ 
-                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[2]:unit->Web3), abiString, (%%args.[1]:string), GasLimit (%%args.[3]:uint64), GasPrice(%%args.[4]:uint64)) @@>)
-                        () :> obj 
+                        ContractPlug((%%args.[1]:unit->Web3), abiString, (%%args.[0]:string), GasLimit (%%args.[2]:uint64), GasPrice(%%args.[3]:uint64))
                     @@>) 
 
             let ctr2 = 
@@ -285,21 +234,19 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                     } |> Seq.toList
                 ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
                     <@@ 
-                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[2]: Web3), abiString, (%%args.[1]:string), GasLimit (%%args.[3]:uint64), GasPrice(%%args.[4]:uint64)) @@>)
-                        () :> obj 
+                        ContractPlug((%%args.[1]: Web3), abiString, (%%args.[0]:string), GasLimit (%%args.[2]:uint64), GasPrice(%%args.[3]:uint64))
                     @@>) 
 
             [ctr1; ctr2]
 
-        let makeDeployConstructor (byteCode: string) (inputs: Parameter seq) =
+        let makeDeployConstructor (byteCode: string) (inputs: Nethereum.ABI.Model.Parameter seq) =
             let abiString = abis.ToString()
 
             let deployArgs = 
                 inputs 
                 |> Seq.mapi(fun index param -> 
-                        let netType = solidityTypeToNetType param._type
-                        let parametrName = if param.name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.name
+                        let netType = solidityTypeToNetType param.Type
+                        let parametrName = if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
                         ProvidedParameter(parametrName, netType)
                     ) 
                 |> Seq.toList
@@ -317,13 +264,11 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                 ProvidedConstructor(parameters = ctrParams, invokeCode = fun args -> 
                     let fargs = 
                         if deployArgsLength > 0 then
-                            Expr.NewArrayUnchecked(typeof<obj>, args.[2..2 + (deployArgs.Length) - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
+                            Expr.NewArrayUnchecked(typeof<obj>, args.[1..1 + (deployArgs.Length) - 1] |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
                         else
                             Expr.NewArrayUnchecked(typeof<obj>, [])
                     <@@ 
-                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[1]:unit->Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[2 + deployArgsLength]:uint64), GasPrice (%%args.[3 + deployArgsLength]:uint64)) @@>)
-                        () :> obj 
+                        ContractPlug((%%args.[0]:unit->Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[1 + deployArgsLength]:uint64), GasPrice (%%args.[2 + deployArgsLength]:uint64))
                     @@>) 
 
             let ctr2 = 
@@ -342,116 +287,133 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                         else
                             Expr.NewArrayUnchecked(typeof<obj>, [])
                     <@@ 
-                        %%Expr.FieldSetUnchecked(args.[0], contractPlug, 
-                            <@@ ContractPlug((%%args.[1]: Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[2 + deployArgsLength]:uint64), GasPrice(%%args.[3 + deployArgsLength]:uint64)) @@>)
-                        () :> obj 
+                        ContractPlug((%%args.[0]:Web3), abiString, byteCode, (%%fargs: obj array), GasLimit (%%args.[1 + deployArgsLength]:uint64), GasPrice (%%args.[2 + deployArgsLength]:uint64))
                     @@>) 
 
             [ctr1; ctr2]
 
         let makeType name baseType = 
-            let result = ProvidedTypeDefinition(name, Some <| baseType, isErased = false)
-            let ctrDefault = ProvidedConstructor(parameters = [], invokeCode = fun _ -> Expr.Value(()))
+            let result = ProvidedTypeDefinition(name, Some <| baseType, isErased = true)
+            let ctr = baseType.GetConstructor([||])
+
+            let ctrDefault = ProvidedConstructor(parameters = [], invokeCode = fun _ -> Expr.NewObject(ctr, []))
             result.AddMember ctrDefault
             result
 
-        let createNestedTypes (contractType:ProvidedTypeDefinition) nameSufix (json: JObject) =
+        let makeContractFunction (contractType:ProvidedTypeDefinition) nameSufix (json:string) =
+            let functionABI = 
+                let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+                let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
+                let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(json, convertor)
+                abiDeserialiser.BuildFunction json 
+
+            let functionOutputType = makeType (sprintf "%s%sOutputDTO" functionABI.Name nameSufix) typeof<FunctionOutputDTO> 
+            let outParamsSorted = (functionABI.OutputParameters |> Array.sortBy(fun p -> p.Order))
+
+            let outputPropertes = Array.mapi makeProperty outParamsSorted
+            let keyList = outputPropertes |> Array.map fst 
+
+            functionOutputType.AddMembers (outputPropertes |> Seq.map snd |> Seq.toList)
+             
+            contractType.AddMember functionOutputType
+
+            match functionABI.OutputParameters with
+            | [||] -> ()
+            | [|param|] -> 
+                let querys = makeFunctionQuery (sprintf "%s%s" functionABI.Name nameSufix) functionABI.InputParameters (solidityTypeToNetType param.Type) json
+                contractType.AddMembers querys
+            | _ -> 
+                let querys = makeFunctionQueryObj (sprintf "%s%s" functionABI.Name nameSufix) functionABI.InputParameters functionOutputType keyList json
+                contractType.AddMembers querys
+
+            let methods = makeFunctionMethods (sprintf "%s%s" functionABI.Name nameSufix) functionABI.InputParameters
+            contractType.AddMembers methods
+
+            let functionData = makeFunctionData (sprintf "%s%s" functionABI.Name nameSufix) functionABI.InputParameters
+            contractType.AddMember functionData
+
+            let transactionInput = makeFunctionTransactionInput (sprintf "%s%s" functionABI.Name nameSufix) functionABI.InputParameters
+
+            contractType.AddMember transactionInput
+            ()
+
+        let makeContractEvent (contractType:ProvidedTypeDefinition) (json: string) =
+            let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+            let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
             
-            match string json.["type"] with
-            | "function" -> 
-                let dto = Json.deserialize<FunctionJsonDTO> (string json)
-                
-                let functionType = makeType (sprintf "%s%sFunction" dto.name nameSufix) typeof<FunctionMessage>
+            let eventABI = 
+                let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(json, convertor)
+                abiDeserialiser.BuildEvent json 
+            let eventType =  makeType (sprintf "%sEventDTO" eventABI.Name) typeof<EventDTO>
 
-                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
-                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
+            let topicProperties = eventABI.InputParameters |> Seq.where(fun p -> p.Indexed) |> Seq.sortBy(fun p -> p.Order) |> Seq.toList
+            let dataProperties = eventABI.InputParameters |> Seq.where(fun p -> not p.Indexed) |> Seq.sortBy(fun p -> p.Order) |> Seq.toList
 
-                functionType.AddMembers fields
-                functionType.AddMembers propertes
+            let propertes = Seq.mapi makeProperty (topicProperties @ dataProperties) |> Seq.toList
+            eventType.AddMembers (propertes |> List.map snd)
+            
+            let keyList = propertes |> Seq.map fst |> Seq.toArray
 
+            eventType.AddMember <| makeDecodeEvent eventType keyList json
 
-                let functionOutputType = makeType (sprintf "%s%sOutputDTO" dto.name nameSufix) typeof<FunctionOutputDTO> 
+            contractType.AddMember eventType
+            ()
 
-                let outputFields = dto.outputs |> Seq.mapi makeField |> Seq.toList
-                let outputPropertes = Seq.mapi2 makeProperty outputFields dto.outputs |> Seq.toList
-                
-                functionOutputType.AddMembers outputFields
-                functionOutputType.AddMembers outputPropertes
+        let makeContractConstructor (contractType:ProvidedTypeDefinition) (constructorABI:ConstructorABI) =
+            
+            let constructorType =  makeType (sprintf "%sDeployment" contractName) typeof<obj>
 
-                functionOutputType.AddCustomAttribute (getAttribute typeof<FunctionOutputAttribute>)
+            let propertes = Seq.mapi makeProperty constructorABI.InputParameters |> Seq.toList |> List.map snd
 
-                match dto.outputs with
-                | [||] -> 
-                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name|])
-                | [|param|] -> 
-                    let querys = makeFunctionQuery (sprintf "%s%s" dto.name nameSufix) dto.inputs (solidityTypeToNetType param._type) false
-                    contractType.AddMembers querys
+            constructorType.AddMembers propertes
 
-                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; param._type|])
-                | _ -> 
-                    let querys = makeFunctionQuery (sprintf "%s%s" dto.name nameSufix) dto.inputs functionOutputType true
-                    contractType.AddMembers querys
-
-                    functionType.AddCustomAttribute (getAttributeWithParams typeof<FunctionAttribute> [|dto.name; functionOutputType|])
-
-                let methods = makeFunctionMethods (sprintf "%s%s" dto.name nameSufix) dto.inputs
-                contractType.AddMembers methods
-
-                let functionData = makeFunctionData (sprintf "%s%s" dto.name nameSufix) dto.inputs
-                contractType.AddMember functionData
-
-                contractType.AddMembers [functionOutputType; functionType]
-            | "event" -> 
-                let dto = Json.deserialize<EventJsonDTO> (string json) 
-                let eventType =  makeType (sprintf "%sEventDTO" dto.name) typeof<EventDTO>
-
-                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
-                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
-                
-                eventType.AddMembers fields
-                eventType.AddMembers propertes
-
-                eventType.AddCustomAttribute (getAttributeWithParams typeof<EventAttribute> [|dto.name|])
-
-                contractType.AddMember eventType
-            | "constructor" ->
-                let dto = Json.deserialize<ConstructorJsonDTO> (string json) 
-                let constructorType =  makeType (sprintf "%sDeployment" contractName) typeof<obj>
-
-                let fields = dto.inputs |> Seq.mapi makeField |> Seq.toList
-                let propertes = Seq.mapi2 makeProperty fields dto.inputs |> Seq.toList
-
-                constructorType.AddMembers fields
-                constructorType.AddMembers propertes
-
-                match byteCode with
-                | Some byteCode ->
-                    let construtors = makeDeployConstructor byteCode dto.inputs
-                    contractType.AddMembers construtors
-                | _ -> ()
-
-                contractType.AddMember constructorType
+            match byteCode with
+            | Some byteCode ->
+                let construtors = makeDeployConstructor byteCode constructorABI.InputParameters
+                contractType.AddMembers construtors
             | _ -> ()
 
-        let contractType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<obj>, isErased = false, hideObjectMethods = true)
+            contractType.AddMember constructorType
+            ()
 
-        abis.Children<JObject>() 
-        |> Seq.groupBy(fun json -> 
-                let _type = string json.["type"]
-                let _name = 
-                    match json.TryGetValue "name" with
-                    | true, v -> string v
-                    | _ -> "Noname"
-                _type + _name
+        let contractType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<ContractPlug>, isErased = true, hideObjectMethods = true)
+
+        
+
+        let functions = List<JObject>()
+        let events = List<string>()
+
+        for element in abis.Children<JObject>() do
+            match string element.["type"] with
+            | "constructor" -> 
+                let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+                let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
+                let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(element.ToString(), convertor)
+                
+                makeContractConstructor contractType (abiDeserialiser.BuildConstructor json)
+            | "function" ->
+                functions.Add element
+            | "event" -> 
+                events.Add (element.ToString())
+            | _ -> ()
+
+        events |> Seq.iter(makeContractEvent contractType)
+
+        functions 
+        |> Seq.groupBy(fun (json) -> 
+            match json.TryGetValue "name" with
+            | true, v -> string v
+            | _ -> "Noname"
         )
-        |> Seq.iter(fun (_,group) ->
+        |> Seq.iter(fun (_, group) -> 
             match group |> Seq.toList with
             | [] -> ()
-            | [json] -> createNestedTypes contractType "" json
-            | headJson::tailJson -> 
-                createNestedTypes contractType  "" headJson
-                tailJson |> List.iteri(fun i json -> createNestedTypes contractType  (sprintf "%i" (i + 1)) json)
-                )
+            | [json] -> makeContractFunction contractType "" (string json)
+            | json::tail -> 
+                makeContractFunction contractType "" (string json)
+                tail |> List.iteri(fun i json -> makeContractFunction contractType (sprintf "%i" (i + 1)) (string json))
+
+        )
 
         if contractType.GetConstructors().Length = 0 then
             match byteCode with
@@ -460,22 +422,18 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
                 contractType.AddMembers construtors
             | _ -> ()
 
-        contractType.AddMember contractPlug
-
         let defaultConstructors = makeDefaultConstructor()
         contractType.AddMembers defaultConstructors
 
-        contractType.AddMember <| ProvidedProperty(propertyName = "ContractPlug", propertyType = typeof<ContractPlug>, getterCode = fun args -> Expr.FieldGet(args.[0], contractPlug))
-
-        let addressGetter = fun (args: Expr list) -> <@@ (%%Expr.FieldGet(args.[0], contractPlug): ContractPlug).Contract.Address @@>
+        let addressGetter = fun (args: Expr list) -> <@@ (%%args.[0]: ContractPlug).Contract.Address @@>
         contractType.AddMember <| ProvidedProperty(propertyName = "Address", propertyType = typeof<string>, getterCode = addressGetter)
         contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
 
-        contractType.GetMembers() 
-        |> Seq.groupBy(fun m -> m.MemberType)
-        |> Seq.iter(fun (mt, ms) -> 
-            printfn "%A: %d" mt (ms |> Seq.length)
-        )
+        //contractType.GetMembers() 
+        //|> Seq.groupBy(fun m -> m.MemberType)
+        //|> Seq.iter(fun (mt, ms) -> 
+        //    printfn "%A: %d" mt (ms |> Seq.length)
+        //)
         contractType
 
 
@@ -502,9 +460,7 @@ let constructRootType (ns:string) (typeName:string) (buildPath: string) =
         |> Seq.toList
         |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
 
-    let asm = ProvidedAssembly()
-    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = false)
+    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = true)
     rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ buildPath @@>)
     rootType.AddMembers contractTypes
-    asm.AddTypes [rootType]
     rootType

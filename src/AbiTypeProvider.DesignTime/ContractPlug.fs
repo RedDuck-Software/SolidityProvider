@@ -2,10 +2,12 @@
 
 open System.Numerics
 open Nethereum.Web3
-open Nethereum.Hex.HexTypes
+open Nethereum.ABI.FunctionEncoding
 open Nethereum.RPC.Eth.DTOs
 open System
 open AbiTypeProvider.Common
+open System.Collections.Generic
+open Nethereum.Contracts
 
 type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: GasLimit, gasPrice: GasPrice) =
 
@@ -56,7 +58,7 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: G
     member this.QueryObj<'a when 'a: (new: unit -> 'a)> functionName arguments = 
         this.QueryObjAsync<'a> functionName arguments |> runNow
 
-    member this.QueryAsync<'a> functionName arguments = 
+    member this.QueryAsync<'a> functionName (arguments: obj []) = 
         (this.Function functionName).CallAsync<'a> (arguments)
 
     member this.Query<'a> functionName arguments = 
@@ -64,6 +66,13 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: G
 
     member this.FunctionData functionName arguments = 
         (this.Function functionName).GetData(arguments)
+
+    member this.FunctionTransactionInput functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
+        let ti = (this.Function functionName).CreateTransactionInput(this.Account.Address, arguments)
+        ti.Gas <- gasLimit.Value
+        ti.GasPrice <- gasPrice.Value
+        ti.Value <- weiValue.Value
+        ti
 
     member this.ExecuteFunctionAsyncWithValueFrom functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
         let data = this.FunctionData functionName arguments 
@@ -79,44 +88,41 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: G
         this.ExecuteFunctionAsync functionName arguments weiValue gasLimit gasPrice |> runNow
 
 
+type ContainerTypeFields() =
+    static let storage = Dictionary<string, obj>()
+    static let objectIdGen = System.Runtime.Serialization.ObjectIDGenerator()
+
+    static member getValue (instance:obj, defualValue: obj, key: obj) = 
+        let key = key :?> string
+        let id,_ = objectIdGen.GetId(instance)
+        let fullKey = sprintf "%d_%s" id key
+        if storage.ContainsKey(fullKey) |> not then
+            storage.Add(fullKey, defualValue)
+        storage.[fullKey]
+
+    static member getValueBigInteger (instance:obj, key: obj) = 
+        let key = key :?> string
+        let id,_ = objectIdGen.GetId(instance)
+        let fullKey = sprintf "%d_%s" id key
+        if storage.ContainsKey(fullKey) |> not then
+            storage.Add(fullKey, BigInteger(456))
+        storage.[fullKey]
+
+    static member setValue (instance:obj, key: obj, v: obj) = 
+        let key = key:?> string
+        let id,_ = objectIdGen.GetId(instance)
+        let fullKey = sprintf "%d_%s" id key
+        if storage.ContainsKey(fullKey) then
+            storage.[fullKey] <- v
+        else
+            storage.Add(fullKey, v)
+
 
 type MethodHelper() = 
-    static member ExecuteFunctionMethod0Async (args: obj[]) = 
+    static member ExecuteFunctionMethodAsync (args: obj[]) = 
         let functionName = args.[0] :?> string
         let argsLength = args.[1] :?> int
-        let this = args.[2]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[3..3 + argsLength - 1]
-            else
-                [||]
-        contract.ExecuteFunctionAsync functionName fargs (WeiValue 0UL) contract.GasLimit contract.GasPrice
-
-    static member ExecuteFunctionMethod0 (args: obj[]) = 
-        MethodHelper.ExecuteFunctionMethod0Async args |> runNow
-
-    static member ExecuteFunctionMethod1Async (args: obj[]) = 
-        let functionName = args.[0] :?> string
-        let argsLength = args.[1] :?> int
-        let this = args.[2]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[3..3 + argsLength - 1]
-            else
-                [||]
-        let weiValue = args.[3 + argsLength] :?> WeiValue
-        contract.ExecuteFunctionAsync functionName fargs weiValue contract.GasLimit contract.GasPrice
-
-    static member ExecuteFunctionMethod1 (args: obj[]) = 
-        MethodHelper.ExecuteFunctionMethod1Async args |> runNow
-
-    static member ExecuteFunctionMethod2Async (args: obj[]) = 
-        let functionName = args.[0] :?> string
-        let argsLength = args.[1] :?> int
-        let this = args.[2]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
+        let contract = args.[2] :?> ContractPlug
         let fargs = 
             if argsLength > 0 then
                 args.[3..3 + argsLength - 1]
@@ -138,182 +144,125 @@ type MethodHelper() =
                 contract.GasPrice
             else
                 args.[5 + argsLength] :?> GasPrice
-        printfn "weiValue: %A; gasLimit: %A; gasPrice: %A" weiValue gasLimit gasPrice
         contract.ExecuteFunctionAsync functionName fargs weiValue gasLimit gasPrice
 
-    static member ExecuteFunctionMethod2 (args: obj[]) = 
-        MethodHelper.ExecuteFunctionMethod2Async args |> runNow
+    static member ExecuteFunctionMethod (args: obj[]) = 
+        MethodHelper.ExecuteFunctionMethodAsync args |> runNow
+
+    static member FunctionTransactionInput (args: obj[]) = 
+        let functionName = args.[0] :?> string
+        let argsLength = args.[1] :?> int
+        let contract = args.[2] :?> ContractPlug
+        let fargs = 
+            if argsLength > 0 then
+                args.[3..3 + argsLength - 1]
+            else
+                [||]
+
+        let weiValue = 
+            if args.[3 + argsLength] = null then
+                WeiValue 0UL
+            else
+                args.[3 + argsLength] :?> WeiValue
+        let gasLimit = 
+            if args.[4 + argsLength] = null then
+                contract.GasLimit
+            else
+                args.[4 + argsLength] :?> GasLimit
+        let gasPrice = 
+            if args.[5 + argsLength] = null then
+                contract.GasPrice
+            else
+                args.[5 + argsLength] :?> GasPrice
+        contract.FunctionTransactionInput functionName fargs weiValue gasLimit gasPrice
 
 type QueryHelperGeneric<'a> =
-    static member QueryAsync (plug:ContractPlug, functionName, arguments) =
-        plug.QueryAsync<'a> functionName arguments
+    static member QueryAsync (plug:ContractPlug, functionName, json: string, arguments: obj []) =
+        let functionABI = 
+            let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+            let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
+            let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(json, convertor)
+            abiDeserialiser.BuildFunction json 
 
-        //let r = plug.QueryAsync<'a> functionName arguments |> runNow
+        let ethFunction = plug.Function functionName
         
-        //System.Threading.Tasks.Task<'a>.Factory.StartNew(fun () -> r )
+        let callInput = ethFunction.CreateCallInput(arguments)
+        let parametrOutput = 
+            functionABI.OutputParameters 
+            |> Array.map(fun p -> 
+                p.DecodedType <- solidityTypeToNetType p.Type
+                ParameterOutput(Parameter = p))
+        async {
+            let! outputBytes = ethFunction.CallRawAsync(callInput) |> Async.AwaitTask
+            let decoded = ParameterDecoder().DecodeOutput(outputBytes, parametrOutput)
+            return 
+                decoded 
+                |> Seq.map(fun d -> d.Result)
+                |> Seq.cast<'a>
+                |> Seq.head
+        } |> Async.StartAsTask
 
-    static member Query (plug:ContractPlug, functionName, arguments) =
-        plug.QueryAsync<'a> functionName arguments |> runNow
+    static member Query (plug:ContractPlug, functionName, json: string, arguments) =
+        QueryHelperGeneric<'a>.QueryAsync(plug, functionName, json, arguments) |> runNow
 
 type QueryObjHelperGeneric<'a when 'a: (new: unit -> 'a)> =
-    static member QueryObjAsync (plug:ContractPlug, functionName, arguments) =
-        plug.QueryObjAsync<'a> functionName arguments
+    static member QueryAsync (plug:ContractPlug, functionName, json: string, keyList: string [], arguments) =
+        let functionABI = 
+            let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+            let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
+            let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(json, convertor)
+            abiDeserialiser.BuildFunction json 
 
-    static member QueryObj (plug:ContractPlug, functionName, arguments) =
-        plug.QueryObjAsync<'a> functionName arguments |> runNow
-
-type QueryHelper() =
-
-    static member queryAsync (args: obj[]) =
-        let functionName = args.[0] :?> string
-        let outType = args.[1] :?> Type
-        let argsLength = args.[2] :?> int
-        let this = args.[3]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[4..4 + argsLength - 1]
-            else
-                [||]
+        let ethFunction = plug.Function functionName
         
-        let queryHelper = typedefof<QueryHelperGeneric<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryAsync")
-        let args = [|
-            (contract:> obj)
-            (functionName:> obj)
-            (fargs:> obj)
-        |]
-        method.Invoke(null, args)
+        let callInput = ethFunction.CreateCallInput(arguments)
+        let parametrOutput = 
+            functionABI.OutputParameters 
+            |> Array.map(fun p -> 
+                p.DecodedType <- solidityTypeToNetType p.Type
+                ParameterOutput(Parameter = p))
+        async {
+            let! outputBytes = ethFunction.CallRawAsync(callInput) |> Async.AwaitTask
+            let decoded = ParameterDecoder().DecodeOutput(outputBytes, parametrOutput)
+            let r = Activator.CreateInstance(typeof<'a>) :?> 'a
+            Seq.iter2(fun k (p:ParameterOutput) -> ContainerTypeFields.setValue(r, k, p.Result) ) keyList decoded
+            return r
+        } |> Async.StartAsTask
 
-    static member query (args: obj[]) =
-        let functionName = args.[0] :?> string
-        let outType = args.[1] :?> Type
-        let argsLength = args.[2] :?> int
-        let this = args.[3]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[4..4 + argsLength - 1]
-            else
-                [||]
+    static member Query (plug:ContractPlug, functionName, json: string, keyList: string [], arguments) =
+        QueryObjHelperGeneric<'a>.QueryAsync(plug, functionName, json, keyList, arguments) |> runNow
 
-        let queryHelper = typedefof<QueryHelperGeneric<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("Query")
-        let args = [|
-            (contract:> obj)
-            (functionName:> obj)
-            (fargs:> obj)
-        |]
-        method.Invoke(null, args)
+type EventHelperGeneric<'a when 'a: (new: unit -> 'a)> =
+    static member DecodeAllEvents (json: string, keyList: string [], receipt: TransactionReceipt) =
+        let makeInstance (paramList: ParameterOutput seq) = 
+            let topicParams = paramList |> Seq.where(fun p -> p.Parameter.Indexed) |> Seq.sortBy(fun p-> p.Parameter.Order) |> Seq.toList
+            let dataParams = paramList |> Seq.where(fun p -> not p.Parameter.Indexed) |> Seq.sortBy(fun p-> p.Parameter.Order) |> Seq.toList
 
-    static member queryObjAsync (args: obj[]) =
-        let functionName = args.[0] :?> string
-        let outType = args.[1] :?> Type
-        let argsLength = args.[2] :?> int
-        let this = args.[3]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[4..4 + argsLength - 1]
-            else
-                [||]
+            let r = Activator.CreateInstance(typeof<'a>) :?> 'a
 
-        let queryHelper = typedefof<QueryObjHelperGeneric<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryObjAsync")
-        let args = [|
-            (contract:> obj)
-            (functionName:> obj)
-            (fargs:> obj)
-        |]
-        method.Invoke(null, args)
+            Seq.iter2(fun k (p:ParameterOutput) -> ContainerTypeFields.setValue(r, k, p.Result) ) keyList (topicParams @ dataParams)
+            r
 
-    static member  queryObj (args: obj[]) =
-        let functionName = args.[0] :?> string
-        let outType = args.[1] :?> Type
-        let argsLength = args.[2] :?> int
-        let this = args.[3]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
-        let fargs = 
-            if argsLength > 0 then
-                args.[4..4 + argsLength - 1]
-            else
-                [||]
+        let eventABI = 
+            let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
+            let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
+            let json = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string, obj>>(json, convertor)
+            abiDeserialiser.BuildEvent json
 
-        let queryHelper = typedefof<QueryObjHelperGeneric<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryObj")
-        let args = [|
-            (contract:> obj)
-            (functionName:> obj)
-            (fargs:> obj)
-        |]
-        method.Invoke(null, args)
+        eventABI.DecodeAllEventsDefaultTopics(receipt.Logs)
+        |> Seq.map(fun e -> e.Event)
+        |> Seq.map makeInstance 
+        |> Seq.toArray
+
 
 type FunctionDataHelper() = 
     static member FunctionData (args: obj[]) = 
         let functionName = args.[0] :?> string
         let argsLength = args.[1] :?> int
-        let this = args.[2]
-        let contract = this.GetType().GetProperty("ContractPlug").GetValue(this) :?> ContractPlug
+        let contract = args.[2] :?> ContractPlug
         let fargs = 
             if argsLength > 0 then
                 args.[3..3 + argsLength - 1]
             else
                 [||]
         contract.FunctionData functionName fargs
-
-module QueryHelperOld =
-
-    type QueryHelper<'a> =
-        static member QueryAsync (plug:ContractPlug) functionName arguments =
-            plug.QueryAsync<'a> functionName arguments
-
-        static member Query (plug:ContractPlug) functionName arguments =
-            plug.QueryAsync<'a> functionName arguments |> runNow
-
-    type QueryObjHelper<'a when 'a: (new: unit -> 'a)> =
-        static member QueryObjAsync (plug:ContractPlug) functionName arguments =
-            plug.QueryObjAsync<'a> functionName arguments
-
-        static member QueryObj (plug:ContractPlug) functionName arguments =
-            plug.QueryObjAsync<'a> functionName arguments |> runNow
-
-
-    let queryAsync (plug:ContractPlug) (outType: Type) functionName arguments =
-        let queryHelper = typedefof<QueryHelper<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryAsync")
-        let args = [|
-            (plug:> obj)
-            (functionName:> obj)
-            (arguments:> obj)
-        |]
-        method.Invoke(null, args)
-
-    let query (plug:ContractPlug) (outType: 'a) functionName arguments =
-        let queryHelper = typedefof<QueryHelper<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("Query")
-        let args = [|
-            (plug:> obj)
-            (functionName:> obj)
-            (arguments:> obj)
-        |]
-        method.Invoke(null, args)
-
-    let queryObjAsync (plug:ContractPlug) (outType: 'a) functionName arguments =
-        let queryHelper = typedefof<QueryObjHelper<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryObjAsync")
-        let args = [|
-            (plug:> obj)
-            (functionName:> obj)
-            (arguments:> obj)
-        |]
-        method.Invoke(null, args)
-
-    let queryObj (plug:ContractPlug) (outType: 'a) functionName arguments =
-        let queryHelper = typedefof<QueryObjHelper<_>>.MakeGenericType(outType)
-        let method = queryHelper.GetMethod("QueryObj")
-        let args = [|
-            (plug:> obj)
-            (functionName:> obj)
-            (arguments:> obj)
-        |]
-        method.Invoke(null, args)

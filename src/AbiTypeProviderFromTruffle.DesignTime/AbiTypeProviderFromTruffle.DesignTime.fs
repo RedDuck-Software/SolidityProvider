@@ -29,7 +29,7 @@ let resolvePath inPath resolutionFolder (cfg:TypeProviderConfig) =
             cfg.ResolutionFolder 
         else resolutionFolder
 
-let constructRootTypeByTruffle (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
+let constructRootTypeByTruffle asm (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
     let truffleConfigFile = paramValues.[0] :?> string
     let cleanBeforeBuild = paramValues.[1] :?> bool
     let resolutionFolder = paramValues.[2] :?> string
@@ -93,7 +93,7 @@ let constructRootTypeByTruffle (ns:string) (cfg:TypeProviderConfig) (typeName:st
             failwith msg
         
     build()
-    constructRootType ns typeName contractsBuildDirectory
+    constructRootType asm ns typeName contractsBuildDirectory
 
 
 [<TypeProvider>]
@@ -115,6 +115,6 @@ type AbiTypeProviderFromTruffle (config:TypeProviderConfig) as this =
 
     let typesByFolder = ProvidedTypeDefinition(asm, ns, "AbiTypesFromTruffle", Some typeof<obj>, isErased = false)
 
-    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByTruffle ns config)
+    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByTruffle asm ns config)
     
     do this.AddNamespace(ns, [typesByFolder])

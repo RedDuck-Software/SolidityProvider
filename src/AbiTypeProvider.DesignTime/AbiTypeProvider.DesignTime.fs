@@ -8,6 +8,10 @@ open ProviderImplementation.ProvidedTypes
 open AbiTypeProvider
 open ConstructRootType
 
+[<AutoOpen>]
+module internal Cache =
+    let mutable value: obj = null
+
 [<TypeProviderAssembly>]
 do ()
 
@@ -27,12 +31,17 @@ let resolvePath inPath resolutionFolder (cfg:TypeProviderConfig) =
             cfg.ResolutionFolder 
         else resolutionFolder
 
-let constructRootTypeByFolder (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
-    let contractsFolderPath = paramValues.[0] :?> string
-    let resolutionFolder = paramValues.[1] :?> string
+let constructRootTypeByFolder asm (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
+    if Cache.value = null then
+        let contractsFolderPath = paramValues.[0] :?> string
+        let resolutionFolder = paramValues.[1] :?> string
 
-    let buildPath = resolvePath contractsFolderPath resolutionFolder cfg
-    constructRootType ns typeName buildPath
+        let buildPath = resolvePath contractsFolderPath resolutionFolder cfg
+        let result = constructRootType asm ns typeName buildPath
+        Cache.value <- result
+        result
+    else
+        Cache.value :?> ProvidedTypeDefinition
 
 
 [<TypeProvider>]
@@ -50,9 +59,9 @@ type AbiTypeProvider (config:TypeProviderConfig) as this =
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
     do assert (typeof<ContractPlug>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let typesByFolder = ProvidedTypeDefinition(asm, ns, "AbiTypes", Some typeof<obj>, isErased = false)
+    let typesByFolder = ProvidedTypeDefinition(asm, ns, "AbiTypes", Some typeof<obj>, isErased = true)
 
-    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByFolder ns config)
+    do typesByFolder.DefineStaticParameters(staticParams, constructRootTypeByFolder asm ns config)
     
     do this.AddNamespace(ns, [typesByFolder])
 

@@ -13,6 +13,19 @@ module misc =
     let inline bigInt (value: uint64) = BigInteger(value)
     let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
 
+    let solidityTypeToNetType solType = 
+        match solType with
+        | "uint256" | "unit160" | "uint128" | "uint80" | "int256" | "int160" | "int128" | "int80" -> typeof<BigInteger>
+        | "uint8" -> typeof<uint8>
+        | "uint16" -> typeof<uint16>
+        | "uint32" -> typeof<uint32>
+        | "uint64" -> typeof<uint64>
+        | "address" -> typeof<string>
+        | "bool" -> typeof<bool>
+        | "bytes" | "bytes32" | "bytes4" -> typeof<byte array>
+        | _ -> typeof<string>
+    
+
 type GasLimit(v: HexBigInteger) = 
     member this.Value = v
     new (v:BigInteger) = GasLimit(HexBigInteger v)
