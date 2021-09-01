@@ -10,6 +10,7 @@ nuget Nethereum.Hex 3.8
 nuget Nethereum.ABI 3.8
 nuget Nethereum.Contracts 3.8
 nuget FSharp.Json 0.4.0
+nuget System.Text.Json 5.0.2
 
 nuget NETStandard.Library.NETFramework
 # nuget System.Text.Encoding.CodePages

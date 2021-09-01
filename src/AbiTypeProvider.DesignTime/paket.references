@@ -6,7 +6,7 @@ Nethereum.Web3
 Nethereum.Hex
 Nethereum.ABI
 Nethereum.Contracts
-FSharp.Json
+System.Text.Json
 
 # put any package references here
 # Some.Package

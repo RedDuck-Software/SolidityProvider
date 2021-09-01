@@ -4,13 +4,10 @@
 open System.Reflection
 open System.IO
 open System
-open FSharp.Json
 open Nethereum.ABI.FunctionEncoding.Attributes
-open Newtonsoft.Json.Linq
 open ProviderImplementation.ProvidedTypes
 open ProviderImplementation.ProvidedTypes.UncheckedQuotations
 open AbiTypeProvider
-open Nethereum.Contracts
 open Microsoft.FSharp.Quotations
 open System.Collections.Generic
 open System.Threading.Tasks
@@ -19,10 +16,10 @@ open Nethereum.Web3
 open System.Numerics
 open AbiTypeProvider.Common
 open Nethereum.ABI.Model
-
+open System.Text.Json
 
 let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: string) = 
-    let createType (fileName: string, contractName, abis:JToken, byteCode: string option) =
+    let createType (fileName: string, contractName, abis:JsonElement, byteCode: string option) =
         
         let gasArgs = [
             ProvidedParameter("gas", typeof<uint64>, optionalValue = uint64 9500000UL)
@@ -380,11 +377,11 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
 
         
 
-        let functions = List<JObject>()
+        let functions = List<JsonElement>()
         let events = List<string>()
 
-        for element in abis.Children<JObject>() do
-            match string element.["type"] with
+        for element in abis.EnumerateArray() do
+            match element.GetProperty("type").GetString() with
             | "constructor" -> 
                 let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
                 let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
@@ -394,15 +391,15 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             | "function" ->
                 functions.Add element
             | "event" -> 
-                events.Add (element.ToString())
+                events.Add (string element)
             | _ -> ()
 
         events |> Seq.iter(makeContractEvent contractType)
 
         functions 
         |> Seq.groupBy(fun (json) -> 
-            match json.TryGetValue "name" with
-            | true, v -> string v
+            match json.TryGetProperty "name" with
+            | true, v -> v.GetString()
             | _ -> "Noname"
         )
         |> Seq.iter(fun (_, group) -> 
@@ -437,30 +434,32 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
         contractType
 
 
+    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = true)
+    rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ buildPath @@>)
 
 
-    let contractTypes = 
-        Directory.EnumerateFiles(buildPath, "*.json") 
-        |> Seq.map(fun fileName -> 
-            let json = File.ReadAllText fileName
-            let parsedJson = JObject.Parse(json)
-            //printfn "parsedJson: %A" parsedJson
-            let abis = parsedJson.["abi"]
-            let contractName = parsedJson.["contractName"].ToString()
+    Directory.EnumerateFiles(buildPath, "*.json") 
+    |> Seq.map(fun fileName -> 
+        async {
+            use strem = new FileStream(fileName, FileMode.Open)
+            let! parsedJson = JsonDocument.ParseAsync(strem) |> Async.AwaitTask
+
+            let abis = parsedJson.RootElement.GetProperty("abi")
+            let contractName = parsedJson.RootElement.GetProperty("contractName").GetString()
             let byteCode = 
-                match parsedJson.TryGetValue("bytecode") with
-                | true, token -> Some (token.ToString())
+                match parsedJson.RootElement.TryGetProperty("bytecode") with
+                | true, token -> Some (token.GetString())
                 | _ -> 
                     printfn "bytecode not found"
                     None
             printfn "contractName: %A" contractName
 
-            (fileName, contractName, abis, byteCode))
-        |> Seq.map createType
-        |> Seq.toList
-        |> List.fold (fun contractTypes contractType -> contractType::contractTypes) []
+            let contractType = createType (fileName, contractName, abis, byteCode)
+            rootType.AddMember contractType
+        }
+    )
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
 
-    let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = true)
-    rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ buildPath @@>)
-    rootType.AddMembers contractTypes
     rootType
