@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\netfx.props" />
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>netstandard2.0;netcoreapp3.1;</TargetFrameworks>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fsi</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fs</Link>
+    </Compile>
+    <Compile Include="..\AbiTypeProvider.DesignTime\ContractPlug.fs" Link="ContractPlug.fs" />
+    <Compile Include="..\AbiTypeProvider.DesignTime\ConstructRootType.fs" Link="ConstructRootType.fs" />
+    <Compile Include="AbiTypeProviderFromTruffle.DesignTime.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

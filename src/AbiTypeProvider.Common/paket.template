@@ -1,0 +1,28 @@
+type project
+id AbiTypeProvider.Common
+title
+    AbiTypeProvider.Common
+authors
+    Mark Virchenko, Schalk Dormehl, Ilyas Rahimov, Michael Prokazin
+projectUrl
+    https://github.com/RedDuck-Software/SolidityProvider
+iconUrl
+    https://raw.githubusercontent.com/RedDuck-Software/SolidityProvider/master/misc/logo82x128.png
+licenseUrl
+    https://licenses.nuget.org/GPL-3.0-or-later
+requireLicenseAcceptance
+    false
+tags
+    F# FSharp typeprovider Solidity Ethereum SolidityProvider AbiTypeProvider Nethereum
+summary
+    AbiTypeProvider.Common include GasLimit, GasPrice, WeiValue types
+description
+    AbiTypeProvider.Common include GasLimit, GasPrice, WeiValue types
+licenseExpression GPL-3.0-or-later
+
+dependencies
+  FSharp.Core >= LOCKEDVERSION
+  Nethereum.Hex >= LOCKEDVERSION
+
+include-referenced-projects 
+    true

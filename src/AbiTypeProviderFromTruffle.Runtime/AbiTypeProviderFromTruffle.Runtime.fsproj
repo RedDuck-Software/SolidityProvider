@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- See https://stackoverflow.com/questions/43921992/how-can-i-use-beforebuild-and-afterbuild-targets-with-visual-studio-2017 -->
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="..\..\netfx.props" />
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>netstandard2.0;netcoreapp3.1</TargetFrameworks>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+  </PropertyGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <ItemGroup>
+    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fsi</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fs</Link>
+    </Compile>
+    <Compile Include="..\AbiTypeProvider.DesignTime\ContractPlug.fs" Link="ContractPlug.fs" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="AbiTypeProviderFromTruffle.Runtime.fs" />
+    <None Include="paket.references" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj" />
+  </ItemGroup>
+  <Target Name="BeforeBuild">
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Restore" />
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp3.1" />
+    <MSBuild Projects="..\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
+  </Target>
+  <Target Name="AfterBuild">
+    <CreateItem Include="..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.dll;..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netcoreapp3.1\*.pdb">
+      <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
+    </CreateItem>
+    <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp3.1" />
+    <CreateItem Include="..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\AbiTypeProviderFromTruffle.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
+      <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
+    </CreateItem>
+    <Copy SourceFiles="@(DesignTimeBinaries3)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netstandard2.0" />
+  </Target>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

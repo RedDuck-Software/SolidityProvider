@@ -1,16 +1,18 @@
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.ABI.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Contracts.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.RPC.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Hex.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.JsonRpc.Client.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Web3.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Accounts.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Signer.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.ABI.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Contracts.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.RPC.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Hex.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.JsonRpc.Client.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Web3.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Accounts.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Nethereum.Signer.dll"
 
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Newtonsoft.JSON.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Common.Logging.Core.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\BouncyCastle.Crypto.dll"
-#r @"..\..\src\SolidityProvider.Runtime\bin\Debug\netcoreapp3.1\SolidityProvider.Runtime.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Newtonsoft.JSON.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\Common.Logging.Core.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\BouncyCastle.Crypto.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\typeproviders\fsharp41\netcoreapp3.1\AbiTypeProvider.Common.dll"
+//#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProvider.Runtime.dll"
+#r @"..\..\src\AbiTypeProvider.Runtime\bin\Debug\netcoreapp3.1\AbiTypeProvider.Runtime.dll"
 
 open Nethereum.ABI.FunctionEncoding.Attributes
 open Nethereum.RPC
@@ -23,7 +25,6 @@ open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System.Numerics
 open Nethereum.Hex
-open SolidityProviderNamespace
 
 let inline runNow task =
     task
@@ -35,24 +36,32 @@ type Abi(filename) =
     member this.AbiString = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("abi").ToString()
     member this.Bytecode = JsonConvert.DeserializeObject<JObject>(this.JsonString).GetValue("bytecode").ToString()
 
-type B = SolidityProviderNS.SolidityTypesFromTruffle< @"../truffle-config.js" >
-type A = SolidityProviderNS.SolidityTypes< @"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts">
+type A = AbiTypeProvider.AbiTypes< @"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts">
+
+//type B = AbiTypeProvider.AbiTypesFromTruffle< @"../truffle-config.js" >
 
 let hardhatPrivKey = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 let hardhatURI = "http://192.168.122.1:8545"
 
-let abi = Abi(@"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts\Oracle.json")
+// let abi = Abi(@"C:\Users\Ilyas\source\repos\ConsoleApp1\Contracts\Oracle.json")
 
-abi.Bytecode
+// abi.Bytecode
+open AbiTypeProvider.Common
 
 let web3 = Web3(Account(hardhatPrivKey), hardhatURI)
+let dEth = A.dEthContract("", web3)
+let r = dEth.authority(weiValue 1UL)
+printfn "%A" r
 
-let inline bigInt (value: uint64) = BigInteger(value)
-let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
+printfn "%A" r.Status
 
-let makerOracleMainnet = "0x729D19f657BD0614b4985Cf1D82531c67569197B"
-let daiUsdMainnet = "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9"
-let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+
+// let inline bigInt (value: uint64) = BigInteger(value)
+// let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
+
+// let makerOracleMainnet = "0x729D19f657BD0614b4985Cf1D82531c67569197B"
+// let daiUsdMainnet = "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9"
+// let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 
 // let r = 
 //     web3.Eth.DeployContract.SendRequestAndWaitForReceiptAsync(
@@ -70,18 +79,19 @@ let ethUsdMainnet = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 //let oracleContractMainnet = A.OracleContract((fun () -> web3), makerOracleMainnet, daiUsdMainnet, ethUsdMainnet)
 
 
-let lottery = A.LotteryContract(fun () -> web3)
+// let lottery = A.LotteryContract(fun () -> web3)
 
 
+// open AbiTypeProvider
 
-// let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
-// printfn "%A" (qo)
-let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, lottery.ContractPlug.GasPrice)
-let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, gasPrice 900000UL)
+// // let qo = lottery.ContractPlug.Query<bigint> "random" [| BigInteger 12354; uint32 45 |]
+// // printfn "%A" (qo)
+// let qo1 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, lottery.ContractPlug.GasPrice)
+// let qo2 = lottery.random(BigInteger 12354, uint32 45, weiValue 0UL, gasLlimit 53356UL, gasPrice 900000UL)
 
-printfn "%A" (qo1)
-// let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
-// printfn "%A" (qo2)
+// printfn "%A" (qo1)
+// // let qo2 = lottery.randomQueryAsync(BigInteger 12354, uint32 45) |> runNow
+// // printfn "%A" (qo2)
 
 
 // let lottery = A.LotteryContract("0", web3)

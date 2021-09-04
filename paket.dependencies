@@ -4,9 +4,13 @@ source https://nuget.org/api/v2
 frameworks: netcoreapp3.1, netstandard2.0
 
 # Add the nuget packages you use here
-nuget FSharp.Core 4.3.4
-nuget Nethereum.Web3
-nuget Nethereum.Hex
+nuget FSharp.Core 4.6.2
+nuget Nethereum.Web3 3.8
+nuget Nethereum.Hex 3.8
+nuget Nethereum.ABI 3.8
+nuget Nethereum.Contracts 3.8
+nuget FSharp.Json 0.4.0
+nuget System.Text.Json 5.0.2
 
 nuget NETStandard.Library.NETFramework
 # nuget System.Text.Encoding.CodePages

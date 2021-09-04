@@ -1,8 +1,5 @@
-File:ProvidedTypes.fsi
-File:ProvidedTypes.fs
-
 FSharp.Core
-Nethereum.Web3
+Nethereum.Hex
 
 # put any package references here
 # Some.Package

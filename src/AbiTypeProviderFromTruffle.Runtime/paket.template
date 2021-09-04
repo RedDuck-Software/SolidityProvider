@@ -1,0 +1,33 @@
+type project
+id AbiTypeProviderFromTruffle
+title
+    AbiTypeProviderFromTruffle
+authors
+    Mark Virchenko, Schalk Dormehl, Ilyas Rahimov, Michael Prokazin
+projectUrl
+    https://github.com/RedDuck-Software/SolidityProvider
+iconUrl
+    https://raw.githubusercontent.com/RedDuck-Software/SolidityProvider/master/misc/logo82x128.png
+licenseUrl
+    https://licenses.nuget.org/GPL-3.0-or-later
+requireLicenseAcceptance
+    false
+tags
+    F# FSharp typeprovider Solidity Ethereum SolidityProvider AbiTypeProvider Nethereum
+summary
+    AbiTypeProvider generates Nethereum types using truffle and interacts with smart contracts in Ethereum.
+description
+    AbiTypeProvider generates Nethereum types using truffle and interacts with smart contracts in Ethereum.
+licenseExpression GPL-3.0-or-later
+files
+    bin/Release/netstandard2.0/AbiTypeProviderFromTruffle.Runtime.* ==> lib/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
+references
+    AbiTypeProviderFromTruffle.Runtime.dll
+    
+dependencies
+    FSharp.Core >= LOCKEDVERSION
+    Nethereum.Hex >= LOCKEDVERSION
+    Nethereum.Web3 >= LOCKEDVERSION
+

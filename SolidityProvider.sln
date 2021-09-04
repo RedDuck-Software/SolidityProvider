@@ -1,3 +1,4 @@
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30717.126
@@ -7,15 +8,19 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B
 		paket.dependencies = paket.dependencies
 	EndProjectSection
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "SolidityProvider.Runtime", "src\SolidityProvider.Runtime\SolidityProvider.Runtime.fsproj", "{85320B79-74AA-4463-AA6D-ED90A95E4227}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProvider.Runtime", "src\AbiTypeProvider.Runtime\AbiTypeProvider.Runtime.fsproj", "{85320B79-74AA-4463-AA6D-ED90A95E4227}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "SolidityProvider.DesignTime", "src\SolidityProvider.DesignTime\SolidityProvider.DesignTime.fsproj", "{E8EB4308-A39F-4627-890A-EDF15BDBFF7B}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProvider.DesignTime", "src\AbiTypeProvider.DesignTime\AbiTypeProvider.DesignTime.fsproj", "{E8EB4308-A39F-4627-890A-EDF15BDBFF7B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{ED8079DD-2B06-4030-9F0F-DC548F98E1C4}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Playground", "Playground\Playground.fsproj", "{81F3812B-1EC0-4B5C-BEF8-8E62C805984C}"
-EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "SolidityProviderTest", "tests\SolidityProviderTest\SolidityProviderTest.fsproj", "{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProviderFromTruffle.Runtime", "src\AbiTypeProviderFromTruffle.Runtime\AbiTypeProviderFromTruffle.Runtime.fsproj", "{DFE81B8F-7253-4187-8146-428FEE3AA69D}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProvider.Common", "src\AbiTypeProvider.Common\AbiTypeProvider.Common.fsproj", "{2A570C21-6E90-447E-A4E0-36B34859E6FD}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "AbiTypeProviderFromTruffle.DesignTime", "src\AbiTypeProviderFromTruffle.DesignTime\AbiTypeProviderFromTruffle.DesignTime.fsproj", "{538F7498-028A-4843-89EE-E8F7DC997421}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,20 +36,27 @@ Global
 		{E8EB4308-A39F-4627-890A-EDF15BDBFF7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E8EB4308-A39F-4627-890A-EDF15BDBFF7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E8EB4308-A39F-4627-890A-EDF15BDBFF7B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{81F3812B-1EC0-4B5C-BEF8-8E62C805984C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{81F3812B-1EC0-4B5C-BEF8-8E62C805984C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{81F3812B-1EC0-4B5C-BEF8-8E62C805984C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{81F3812B-1EC0-4B5C-BEF8-8E62C805984C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFE81B8F-7253-4187-8146-428FEE3AA69D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A570C21-6E90-447E-A4E0-36B34859E6FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{538F7498-028A-4843-89EE-E8F7DC997421}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{538F7498-028A-4843-89EE-E8F7DC997421}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{538F7498-028A-4843-89EE-E8F7DC997421}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{538F7498-028A-4843-89EE-E8F7DC997421}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{81F3812B-1EC0-4B5C-BEF8-8E62C805984C} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{88EB7975-2703-4ED1-AA6E-FE6DB7C4DB32} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
