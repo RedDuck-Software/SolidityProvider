@@ -18,13 +18,20 @@ open AbiTypeProvider.Common
 open Nethereum.ABI.Model
 open System.Text.Json
 
+
+let threadSafeWrapper (providerType: ProvidedTypeDefinition) = 
+    MailboxProcessor.Start(fun (inbox: MailboxProcessor<ProvidedTypeDefinition>) ->
+        let rec loop () =
+            async{
+                let! nestedType = inbox.Receive()
+                providerType.AddMember nestedType
+                return! loop ()
+            }
+        loop ()
+    )
+
 let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: string) = 
-    let createType (fileName: string, contractName, abis:JsonElement, byteCode: string option) =
-        
-        let gasArgs = [
-            ProvidedParameter("gas", typeof<uint64>, optionalValue = uint64 9500000UL)
-            ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = uint64 8000000000UL)
-        ]
+    let createContractType (fileName: string, contractName, abis:JsonElement, byteCode: string option) =
 
         let getPropertyName index (param:Nethereum.ABI.Model.Parameter) = 
             if param.Name |> System.String.IsNullOrWhiteSpace then (sprintf "Prop%i" index) else param.Name
@@ -41,6 +48,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             let propertyName = getPropertyName index param
             let netType = solidityTypeToNetType param.Type
             
+            //Generate an access key to the field value
             let key = Guid.NewGuid().ToString()
             
             let getter = 
@@ -55,8 +63,14 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             
             key, property
 
+        // Optional arguments for ABI functions
+        let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
+        let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
+        let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
+
         let ExecuteFunctionMethod = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethod")
         let ExecuteFunctionMethodAsync = typeof<MethodHelper>.GetMethod("ExecuteFunctionMethodAsync")
+        /// Creates a method for the ABI function, the method will perform a function on the ethereum, method return a TransactionReceipt
         let makeFunctionMethods name (inputs: Nethereum.ABI.Model.Parameter seq) =
             let parametrList = 
                 inputs 
@@ -74,10 +88,6 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             let getAllArgs (args: Expr list) = 
                     Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
 
-            let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
-            let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
-            let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
-
             let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
             let invokeCode (args: Expr list) :Expr = Expr.Call(ExecuteFunctionMethod, [getAllArgs args])
             let invokeCodeAsync (args: Expr list) :Expr =  Expr.Call(ExecuteFunctionMethodAsync, [getAllArgs args])
@@ -89,6 +99,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
 
 
         let FunctionTransactionInput = typeof<MethodHelper>.GetMethod("FunctionTransactionInput")
+        /// Creates a method for the ABI function, the method return a TransactionInput
         let makeFunctionTransactionInput name (inputs: Nethereum.ABI.Model.Parameter seq) =
             let parametrList = 
                 inputs 
@@ -104,16 +115,12 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             let getAllArgs (args: Expr list) = 
                     Expr.NewArray(typeof<obj>, Expr.Value name :: Expr.Value funArgLength :: args |> List.map(fun e -> Expr.Coerce(e, typeof<obj>)))
 
-            let weiValue = ProvidedParameter("weiValue", typeof<WeiValue>, optionalValue = None)
-            let gasLimit = ProvidedParameter("gasLimit", typeof<GasLimit>, optionalValue = None)
-            let gasPrice = ProvidedParameter("gasPrice", typeof<GasPrice>, optionalValue = None)
-
             let allParametrs = parametrList @ [weiValue; gasLimit; gasPrice]
             let invokeCode (args: Expr list) :Expr = Expr.Call(FunctionTransactionInput, [getAllArgs args])
 
             ProvidedMethod(name + "TransactionInput", allParametrs, typeof<TransactionInput>, invokeCode = invokeCode, isStatic = false)
 
-            
+        /// Creates a method for the ABI function, the method will perform a function on the ethereum, method return simply type
         let makeFunctionQuery name (inputs: Nethereum.ABI.Model.Parameter seq) (output: Type) (json: string) =
             let parametrList = 
                 inputs 
@@ -144,7 +151,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
                 ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
             ]
 
-
+        /// Creates a method for the ABI Eunction, the method will perform a function on the ethereum, method return Function
         let makeFunctionQueryObj name (inputs: Nethereum.ABI.Model.Parameter seq) (output: Type) (keyList: string []) (json: string) =
             let parametrList = 
                 inputs 
@@ -170,12 +177,12 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
                 let result = Expr.Call(QueryHelperQueryAsync, [args.Head; Expr.Value name; Expr.Value json; Expr.Value keyList; fargs])
                 Expr.Coerce(result, asyncOutput)
 
-
             [
                 ProvidedMethod(name + "Query", parametrList, output, invokeCode = invokeCode, isStatic = false)
                 ProvidedMethod(name + "QueryAsync", parametrList, asyncOutput, invokeCode = invokeCodeAsync, isStatic = false)
             ]
 
+        /// Creates a static method for the ABI Event, the method will TransactionReceipt, method returns an array of decoded events
         let makeDecodeEvent (output: Type) (keyList: string []) (json: string) =
             let parametrList = [ProvidedParameter("transactionReceipt", typeof<TransactionReceipt>)]
 
@@ -189,6 +196,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             ProvidedMethod("DecodeAllEvents", parametrList, outArrayType, invokeCode = invokeCode, isStatic = true)
 
         let FunctionDataHelper = typeof<FunctionDataHelper>.GetMethod("FunctionData")
+        /// Creates a method for the ABI function, the method return a FunctionData
         let makeFunctionData name (inputs: Nethereum.ABI.Model.Parameter seq) =
             let parametrList = 
                 inputs 
@@ -207,6 +215,14 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
 
             ProvidedMethod(name + "Data", parametrList, typeof<string>, invokeCode = invokeCode, isStatic = false)
 
+
+        // Common arguments for constructors
+        let gasArgs = [
+            ProvidedParameter("gas", typeof<uint64>, optionalValue = uint64 9500000UL)
+            ProvidedParameter("gasPrice", typeof<uint64>, optionalValue = uint64 8000000000UL)
+        ]
+
+        /// Create a constructors taking an contract address
         let makeDefaultConstructor () =
             let abiString = abis.ToString()
 
@@ -236,6 +252,8 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
 
             [ctr1; ctr2]
 
+
+        /// Creates constructors that will be deploy when instantiated
         let makeDeployConstructor (byteCode: string) (inputs: Nethereum.ABI.Model.Parameter seq) =
             let abiString = abis.ToString()
 
@@ -297,6 +315,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             result.AddMember ctrDefault
             result
 
+        /// Process ABI Function json
         let makeContractFunction (contractType:ProvidedTypeDefinition) nameSufix (json:string) =
             let functionABI = 
                 let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
@@ -305,7 +324,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
                 abiDeserialiser.BuildFunction json 
 
             let functionOutputType = makeType (sprintf "%s%sOutputDTO" functionABI.Name nameSufix) typeof<FunctionOutputDTO> 
-            let outParamsSorted = (functionABI.OutputParameters |> Array.sortBy(fun p -> p.Order))
+            let outParamsSorted = functionABI.OutputParameters |> Array.sortBy(fun p -> p.Order)
 
             let outputPropertes = Array.mapi makeProperty outParamsSorted
             let keyList = outputPropertes |> Array.map fst 
@@ -334,6 +353,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             contractType.AddMember transactionInput
             ()
 
+        /// Process ABI Event json
         let makeContractEvent (contractType:ProvidedTypeDefinition) (json: string) =
             let abiDeserialiser = Nethereum.ABI.JsonDeserialisation.ABIDeserialiser()
             let convertor = Nethereum.ABI.JsonDeserialisation.ExpandoObjectConverter()
@@ -356,6 +376,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
             contractType.AddMember eventType
             ()
 
+        /// Process ABI Constructor json
         let makeContractConstructor (contractType:ProvidedTypeDefinition) (constructorABI:ConstructorABI) =
             
             let constructorType =  makeType (sprintf "%sDeployment" contractName) typeof<obj>
@@ -372,6 +393,7 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
 
             contractType.AddMember constructorType
             ()
+
 
         let contractType = ProvidedTypeDefinition(sprintf "%sContract" contractName, Some typeof<ContractPlug>, isErased = true, hideObjectMethods = true)
 
@@ -426,40 +448,35 @@ let constructRootType (asm:Assembly) (ns:string) (typeName:string) (buildPath: s
         contractType.AddMember <| ProvidedProperty(propertyName = "Address", propertyType = typeof<string>, getterCode = addressGetter)
         contractType.AddMember <| ProvidedProperty(propertyName = "FromFile", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ fileName @@>)
 
-        //contractType.GetMembers() 
-        //|> Seq.groupBy(fun m -> m.MemberType)
-        //|> Seq.iter(fun (mt, ms) -> 
-        //    printfn "%A: %d" mt (ms |> Seq.length)
-        //)
         contractType
 
 
     let rootType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased = true)
     rootType.AddMember <| ProvidedProperty(propertyName = "FromFolder", propertyType = typeof<string>, isStatic = true, getterCode = fun _ -> <@@ buildPath @@>)
 
+    let threadSafeRootType = threadSafeWrapper(rootType)
+
+    let createNested (fileName:string, parsedJson:JsonDocument) = 
+        let abis = parsedJson.RootElement.GetProperty("abi")
+        let contractName = parsedJson.RootElement.GetProperty("contractName").GetString()
+        let byteCode = 
+            match parsedJson.RootElement.TryGetProperty("bytecode") with
+            | true, token -> Some (token.GetString())
+            | _ -> 
+                printfn "bytecode not found"
+                None
+        let contractType = createContractType (fileName, contractName, abis, byteCode)
+        threadSafeRootType.Post(contractType)
 
     Directory.EnumerateFiles(buildPath, "*.json") 
-    |> Seq.map(fun fileName -> 
+    |> Seq.map(fun fn -> 
         async {
-            use strem = new FileStream(fileName, FileMode.Open)
-            let! parsedJson = JsonDocument.ParseAsync(strem) |> Async.AwaitTask
-
-            let abis = parsedJson.RootElement.GetProperty("abi")
-            let contractName = parsedJson.RootElement.GetProperty("contractName").GetString()
-            let byteCode = 
-                match parsedJson.RootElement.TryGetProperty("bytecode") with
-                | true, token -> Some (token.GetString())
-                | _ -> 
-                    printfn "bytecode not found"
-                    None
-            printfn "contractName: %A" contractName
-
-            let contractType = createType (fileName, contractName, abis, byteCode)
-            rootType.AddMember contractType
+            let! parsedJson = JsonDocument.ParseAsync(new FileStream(fn, FileMode.Open)) |> Async.AwaitTask
+            return (fn, parsedJson)
         }
     )
     |> Async.Parallel
     |> Async.RunSynchronously
-    |> ignore
+    |> Array.Parallel.iter createNested
 
     rootType

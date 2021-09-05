@@ -9,6 +9,7 @@ open AbiTypeProvider.Common
 open System.Collections.Generic
 open Nethereum.Contracts
 
+// Base type for contract types
 type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: GasLimit, gasPrice: GasPrice) =
 
     new(web3: Web3, abi: string, address: string, gasLimit: GasLimit, gasPrice: GasPrice) = 
@@ -52,18 +53,6 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: G
     member this.Function functionName = 
         this.Contract.GetFunction(functionName)
 
-    member this.QueryObjAsync<'a when 'a: (new: unit -> 'a)> functionName arguments = 
-        (this.Function functionName).CallDeserializingToObjectAsync<'a> (arguments)
-
-    member this.QueryObj<'a when 'a: (new: unit -> 'a)> functionName arguments = 
-        this.QueryObjAsync<'a> functionName arguments |> runNow
-
-    member this.QueryAsync<'a> functionName (arguments: obj []) = 
-        (this.Function functionName).CallAsync<'a> (arguments)
-
-    member this.Query<'a> functionName arguments = 
-        this.QueryAsync<'a> functionName arguments |> runNow
-
     member this.FunctionData functionName arguments = 
         (this.Function functionName).GetData(arguments)
 
@@ -87,8 +76,10 @@ type ContractPlug(getWeb3: unit->Web3, abi: string, address: string, gasLimit: G
     member this.ExecuteFunction functionName arguments (weiValue:WeiValue) (gasLimit:GasLimit) (gasPrice:GasPrice) = 
         this.ExecuteFunctionAsync functionName arguments weiValue gasLimit gasPrice |> runNow
 
-
+/// A type that stores property values
 type ContainerTypeFields() =
+    // All values are stored in this dictionary
+    // The dictionary key is built from the instance id and the unique property key
     static let storage = Dictionary<string, obj>()
     static let objectIdGen = System.Runtime.Serialization.ObjectIDGenerator()
 
@@ -118,6 +109,7 @@ type ContainerTypeFields() =
             storage.Add(fullKey, v)
 
 
+/// The type contains methods for performing functions on the ethereum
 type MethodHelper() = 
     static member ExecuteFunctionMethodAsync (args: obj[]) = 
         let functionName = args.[0] :?> string
@@ -176,6 +168,7 @@ type MethodHelper() =
                 args.[5 + argsLength] :?> GasPrice
         contract.FunctionTransactionInput functionName fargs weiValue gasLimit gasPrice
 
+/// The type contains methods for performing functions on the ethereum and decoding result to simple types
 type QueryHelperGeneric<'a> =
     static member QueryAsync (plug:ContractPlug, functionName, json: string, arguments: obj []) =
         let functionABI = 
@@ -205,6 +198,7 @@ type QueryHelperGeneric<'a> =
     static member Query (plug:ContractPlug, functionName, json: string, arguments) =
         QueryHelperGeneric<'a>.QueryAsync(plug, functionName, json, arguments) |> runNow
 
+/// The type contains methods for performing functions on the ethereum and decoding result to FunctionOutput types
 type QueryObjHelperGeneric<'a when 'a: (new: unit -> 'a)> =
     static member QueryAsync (plug:ContractPlug, functionName, json: string, keyList: string [], arguments) =
         let functionABI = 
@@ -232,6 +226,7 @@ type QueryObjHelperGeneric<'a when 'a: (new: unit -> 'a)> =
     static member Query (plug:ContractPlug, functionName, json: string, keyList: string [], arguments) =
         QueryObjHelperGeneric<'a>.QueryAsync(plug, functionName, json, keyList, arguments) |> runNow
 
+/// The type contains methods for decoding TransactionReceipt to Event types
 type EventHelperGeneric<'a when 'a: (new: unit -> 'a)> =
     static member DecodeAllEvents (json: string, keyList: string [], receipt: TransactionReceipt) =
         let makeInstance (paramList: ParameterOutput seq) = 
@@ -254,7 +249,7 @@ type EventHelperGeneric<'a when 'a: (new: unit -> 'a)> =
         |> Seq.map makeInstance 
         |> Seq.toArray
 
-
+/// The type contains method for generate FunctionData
 type FunctionDataHelper() = 
     static member FunctionData (args: obj[]) = 
         let functionName = args.[0] :?> string

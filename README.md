@@ -1,9 +1,34 @@
+[![NuGet version](https://badge.fury.io/nu/AbiTypeProvider.svg)](https://badge.fury.io/nu/AbiTypeProvider)
 
-This is a simple F# type provider.  It has separate design-time and runtime assemblies.
+# AbiTypeProvider: Type providers for Ethereum smart contracts
 
-Paket is used to acquire the type provider SDK and build the nuget package (you can remove this use of paket if you like)
+The AbiTypeProvider implements interaction with smart contacts of the Ethereum. The provider allows to deploy contracts, execute the methods of the contracts, decode the results and events.
 
-Building:
+Remote calls, encoding and decoding are done using the library [Nethereum](https://github.com/Nethereum/Nethereum)
+
+Contract types are generated from json files obtained with [Truffle](https://github.com/trufflesuite/truffle)
+
+One area of application is testing smart contracts using dotnet tests tools
+
+### Example
+Example work with [SimpleStorage.sol](example/contracts/SimpleStorage.sol)
+
+```fsharp
+// Build contract types from json files
+type Contracts = AbiTypeProvider.AbiTypes<"./build/contracts">
+
+//Create and deploy contract
+let storageContract = Contracts.SimpleStorageContract(web3)
+//Execute get method
+let getResult = storageContract.getQuery()
+//Execute set method
+storageContract.set(newValue, weiValue 0UL, gasLlimit 8500000UL)
+
+```
+Example project available in [examples](/example) folder
+
+
+### Building provider:
 
     dotnet tool restore
     dotnet paket update
