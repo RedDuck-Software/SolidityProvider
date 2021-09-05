@@ -13,6 +13,7 @@ module misc =
     let inline bigInt (value: uint64) = BigInteger(value)
     let inline hexBigInt (value: uint64) = HexBigInteger(bigInt value)
 
+    /// Convert solidity type to Type
     let solidityTypeToNetType solType = 
         match solType with
         | "uint256" | "unit160" | "uint128" | "uint80" | "int256" | "int160" | "int128" | "int80" -> typeof<BigInteger>

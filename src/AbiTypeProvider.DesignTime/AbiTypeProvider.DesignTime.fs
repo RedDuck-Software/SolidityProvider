@@ -32,6 +32,7 @@ let resolvePath inPath resolutionFolder (cfg:TypeProviderConfig) =
         else resolutionFolder
 
 let constructRootTypeByFolder asm (ns:string) (cfg:TypeProviderConfig) (typeName:string) (paramValues: obj[]) =
+    // For some reason the type generation runs three times, for this reason the cache is used
     if Cache.value = null then
         let contractsFolderPath = paramValues.[0] :?> string
         let resolutionFolder = paramValues.[1] :?> string

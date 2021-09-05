@@ -23,9 +23,6 @@ files
     bin/Release/netstandard2.0/AbiTypeProvider.Runtime.* ==> lib/netstandard2.0
     bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
     bin/Release/typeproviders/fsharp41/netcoreapp3.1/*.dll ==> typeproviders/fsharp41/netcoreapp3.1
-references
-    AbiTypeProvider.Runtime.dll
-
 dependencies
     FSharp.Core >= LOCKEDVERSION
     Nethereum.Hex >= LOCKEDVERSION
